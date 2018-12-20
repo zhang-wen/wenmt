@@ -53,14 +53,14 @@ class Translator(object):
             elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
 
         trans, loss, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
-        trans, ids, attent_matrix = filter_reidx(trans, self.tvcb_i2w, attent_matrix)
+        trans, ids, true_trans, true_idx, attent_matrix = filter_reidx(trans, self.tvcb_i2w, attent_matrix)
 
         #spend = time.time() - trans_start
         #wlog('Word-Level spend: {} / {} = {}'.format(
         #    format_time(spend), len(ids), format_time(spend / len(ids))))
 
         # attent_matrix: (trgL, srcL) numpy
-        return trans, ids, attent_matrix
+        return trans, ids, true_trans, true_idx, attent_matrix
 
     def trans_samples(self, xs_nL, ys_nL):
 
@@ -78,7 +78,7 @@ class Translator(object):
             if len(y_sent) == 2: y_sent, ori_ref_toks = y_sent
             wlog('[{:3}] {}'.format('Ref', y_sent))
 
-            trans, ids, attent_matrix = self.trans_onesent(one_src)
+            trans, ids, true_trans, _, attent_matrix = self.trans_onesent(one_src)
 
             src_toks = [] if x_sent == '' else x_sent.split(' ')
             trg_toks = [] if trans == '' else trans.split(' ')
@@ -96,6 +96,7 @@ class Translator(object):
                 print_attention_text(attent_matrix, src_toks, trg_toks, isP=True)
                 plot_attention(attent_matrix, src_toks, trg_toks, 'att.svg')
 
+            wlog('[{:3}] {}'.format('Ori', true_trans))
             wlog('[{:3}] {}'.format('Out', trans))
 
     def force_decoding(self, batch_tst_data):
@@ -155,14 +156,14 @@ class Translator(object):
                     segs = self.segment_src(x_filter, labels[bidx].strip().split(' '))
                     trans = []
                     for seg in segs:
-                        seg_trans, ids, _ = self.trans_onesent(seg)
+                        seg_trans, ids, _, _, _ = self.trans_onesent(seg)
                         words_cnt += len(ids)
                         trans.append(seg_trans)
                     # merge by order
                     trans = ' '.join(trans)
                 else:
                     if fd_attent_matrixs is None:   # need translate
-                        trans, ids, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
+                        trans, ids, _, _, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
                         trg_toks = [] if trans == '' else trans.split(' ')
                         if trans == '': wlog('What ? null translation ... !')
                         words_cnt += len(ids)

@@ -195,16 +195,16 @@ class Nbs(object):
             next_ces = self.classifier(dec_output)
             next_ces = next_ces.cpu().data.numpy()
             cand_scores = hyp_scores[:, None] + next_ces
-            if i == 1 or i == 2:
-                '''here we make the score of <s> so large to avoid null translation'''
-                cand_scores[:, BOS] = float('+inf')
+            #if i < self.x_len - 1:
+            #    '''here we make the score of <s> so large to avoid null translation'''
+            #    cand_scores[:, EOS] = float('+inf')
             cand_scores_flat = cand_scores.flatten()
             ranks_flat = part_sort(cand_scores_flat, self.k - len(self.hyps))
             voc_size = next_ces.shape[1]
             prevb_id = ranks_flat // voc_size
             word_indices = ranks_flat % voc_size
             costs = cand_scores_flat[ranks_flat]
-            #debug('For beam[{}], pre-beam ids: {}'.format(i, prevb_id))
+            debug('For beam[{}], pre-beam ids: {}'.format(i, list(prevb_id)))
 
             tp_bid = tc.from_numpy(prevb_id).cuda() if wargs.gpu_id else tc.from_numpy(prevb_id)
             delete_idx, next_beam_cur_sent = [], []

@@ -92,9 +92,11 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         if src_sent == '' and all([trg_ref == '' for trg_ref in trg_refs]):
             continue
 
-        if numpy.mod(idx + 1, point_every) == 0: wlog('.', False)
-        if numpy.mod(idx + 1, number_every) == 0: wlog('{}'.format(idx + 1), False)
         idx += 1
+        if ( idx % point_every ) == 0:
+            wlog('.', newline=0)
+            sys.stderr.flush()
+        if ( idx % number_every ) == 0: wlog(idx, newline=0)
 
         if src_sent == '' or any([trg_ref == '' for trg_ref in trg_refs]):
             wlog('Ignore abnormal blank sentence in line number {}'.format(idx))

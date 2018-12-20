@@ -5,6 +5,33 @@ import torch.nn.functional as F
 from tools.utils import PAD, MAX_SEQ_SIZE, wlog
 import wargs
 
+def make_positions(tensor, padding_idx, left_pad, onnx_trace=False):
+    """Replace non-padding symbols with their position numbers.
+    Position numbers begin at padding_idx+1.
+    Padding symbols are ignored, but it is necessary to specify whether padding
+    is added on the left side (left_pad=True) or right side (left_pad=False).
+    """
+    if onnx_trace:
+        range_buf = torch._dim_arange(like=tensor, dim=1) + padding_idx + 1
+        mask = tensor.ne(padding_idx)
+        positions = range_buf.expand_as(tensor)
+        if left_pad:
+            positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
+        return positions * mask.long() + padding_idx * (1 - mask.long())
+
+    max_pos = padding_idx + 1 + tensor.size(1)
+    if not hasattr(make_positions, 'range_buf'):
+        make_positions.range_buf = tensor.new()
+    make_positions.range_buf = make_positions.range_buf.type_as(tensor)
+    if make_positions.range_buf.numel() < max_pos:
+        torch.arange(padding_idx + 1, max_pos, out=make_positions.range_buf)
+    mask = tensor.ne(padding_idx)
+    positions = make_positions.range_buf[:tensor.size(1)].expand_as(tensor)
+    if left_pad:
+        positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
+    return tensor.clone().masked_scatter_(mask, positions[mask])
+
+'''
 def make_positions(tensor, padding_idx):
     """
     Replace non-padding symbols with their position numbers.
@@ -19,22 +46,39 @@ def make_positions(tensor, padding_idx):
     mask = tensor.ne(padding_idx)
     positions = make_positions.range_buf[:tensor.size(1)].expand_as(tensor)
     return tensor.clone().masked_scatter_(mask, positions[mask])
+'''
 
+def PositionalEmbedding(num_embeddings, embedding_dim, padding_idx, left_pad, learned=False):
+    if learned:
+        m = LearnedPositionalEmbedding(num_embeddings + padding_idx + 1, embedding_dim, padding_idx, left_pad)
+        nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
+        nn.init.constant_(m.weight[padding_idx], 0)
+    else:
+        m = SinusoidalPositionalEmbedding(embedding_dim, padding_idx, left_pad, num_embeddings + padding_idx + 1)
+    return m
+
+import torch
 class SinusoidalPositionalEmbedding(nn.Module):
     """This module produces sinusoidal positional embeddings of any length.
-    Padding symbols are ignored
+    Padding symbols are ignored, but it is necessary to specify whether padding
+    is added on the left side (left_pad=True) or right side (left_pad=False).
     """
 
-    def __init__(self, embedding_dim, padding_idx, init_size=1024):
-        super(SinusoidalPositionalEmbedding, self).__init__()
+    def __init__(self, embedding_dim, padding_idx, left_pad, init_size=1024):
+        super().__init__()
         self.embedding_dim = embedding_dim
         self.padding_idx = padding_idx
+        self.left_pad = left_pad
         self.weights = SinusoidalPositionalEmbedding.get_embedding(
             init_size,
             embedding_dim,
             padding_idx,
         )
-        self.register_buffer('_float_tensor', tc.FloatTensor(1))
+        self.onnx_trace = False
+        self.register_buffer('_float_tensor', torch.FloatTensor(1))
+
+    def prepare_for_onnx_export_(self):
+        self.onnx_trace = True
 
     @staticmethod
     def get_embedding(num_embeddings, embedding_dim, padding_idx=None):
@@ -44,19 +88,19 @@ class SinusoidalPositionalEmbedding(nn.Module):
         """
         half_dim = embedding_dim // 2
         emb = math.log(10000) / (half_dim - 1)
-        emb = tc.exp(tc.arange(half_dim, dtype=tc.float) * -emb)
-        emb = tc.arange(num_embeddings, dtype=tc.float).unsqueeze(1) * emb.unsqueeze(0)
-        emb = tc.cat([tc.sin(emb), tc.cos(emb)], dim=1).view(num_embeddings, -1)
+        emb = torch.exp(torch.arange(half_dim, dtype=torch.float) * -emb)
+        emb = torch.arange(num_embeddings, dtype=torch.float).unsqueeze(1) * emb.unsqueeze(0)
+        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1).view(num_embeddings, -1)
         if embedding_dim % 2 == 1:
             # zero pad
-            emb = tc.cat([emb, tc.zeros(num_embeddings, 1)], dim=1)
+            emb = torch.cat([emb, torch.zeros(num_embeddings, 1)], dim=1)
         if padding_idx is not None:
             emb[padding_idx, :] = 0
         return emb
 
     def forward(self, input, incremental_state=None, timestep=None):
         """Input is expected to be of size [bsz x seqlen]."""
-        #bsz, seq_len = tc.onnx.operators.shape_as_tensor(input)
+        #bsz, seq_len = torch.onnx.operators.shape_as_tensor(input)
         bsz, seq_len = input.size(0), input.size(1)
         max_pos = self.padding_idx + 1 + seq_len
         if self.weights is None or max_pos > self.weights.size(0):
@@ -68,7 +112,19 @@ class SinusoidalPositionalEmbedding(nn.Module):
             )
         self.weights = self.weights.type_as(self._float_tensor)
 
-        positions = make_positions(input, self.padding_idx)
+        if incremental_state is not None:
+            # positions is the same for every token when decoding a single step
+            pos = (timestep.int() + 1).long() if timestep is not None else seq_len
+            if self.onnx_trace:
+                return self.weights[self.padding_idx + pos, :].unsqueeze(1).repeat(bsz, 1, 1)
+            return self.weights[self.padding_idx + pos, :].expand(bsz, 1, -1)
+
+        positions = make_positions(input, self.padding_idx, self.left_pad, self.onnx_trace)
+        if self.onnx_trace:
+            flat_embeddings = self.weights.detach().index_select(0, positions.view(-1))
+            embedding_shape = torch.cat((bsz.view(1), seq_len.view(1), torch.LongTensor([-1])))
+            embeddings = torch.onnx.operators.reshape_from_tensor_shape(flat_embeddings, embedding_shape)
+            return embeddings
         return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
 
     def max_positions(self):
@@ -133,7 +189,7 @@ class WordEmbedding(nn.Module):
         if position_encoding is True:
             wlog('with position emb ...')
             #self.pe = PositionalEncoding(emb_dropout, n_embed)
-            self.spe = SinusoidalPositionalEmbedding(n_embed, PAD, MAX_SEQ_SIZE + PAD + 1)
+            #self.spe = PositionalEmbedding(MAX_SEQ_SIZE, n_embed, PAD, left_pad=False, learned=False)
         wlog('with emb dropout prob = {} ...'.format(emb_dropout))
         self.emb_dropout = emb_dropout
 
@@ -163,9 +219,9 @@ class WordEmbedding(nn.Module):
 
         x_w_emb = self.we(x)
         if self.position_encoding is True:
-            #x_wp_emb = self.add_timing_signal(x_w_emb)
-            scale = math.sqrt(self.n_embed)
-            x_wp_emb = scale * x_w_emb + self.spe(x)
+            x_wp_emb = self.add_timing_signal(x_w_emb)
+            #scale = math.sqrt(self.n_embed)
+            #x_wp_emb = scale * x_w_emb + self.spe(x)
         else:
             x_wp_emb = x_w_emb
 

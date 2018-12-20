@@ -5,6 +5,7 @@ from tools.utils import *
 import torch.nn.functional as F
 from .nn_utils import PositionwiseFeedForward
 from .attention import MultiHeadAttention
+from .attention import MultiheadAttention
 
 '''
     Args:
@@ -29,12 +30,14 @@ class SelfAttEncoderLayer(nn.Module):
         super(SelfAttEncoderLayer, self).__init__()
         self.layer_norm_0 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.self_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
+        #self.self_attn = MultiheadAttention(d_model, n_head, dropout=att_dropout)
         self.residual_dropout_prob = residual_dropout
         self.layer_norm_1 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
         self.encoder_normalize_before = encoder_normalize_before
 
-    def forward(self, x, self_attn_mask=None):
+    def forward(self, x, self_attn_mask=None, query_mask=None):
+    #def forward(self, x, encoder_padding_mask=None):
         # x (FloatTensor):         [batch_size, src_L, d_model]
         # self_attn_mask(LongTensor):   [batch_size, src_L, src_L]
         # return:                       [batch_size, src_L, d_model]
@@ -43,7 +46,8 @@ class SelfAttEncoderLayer(nn.Module):
         residual = x
         if self.encoder_normalize_before is True:
             x = self.layer_norm_0(x)   # before 'n' for source self attention preprocess
-        x, enc_self_attns = self.self_attn(x, x, x, attn_mask=self_attn_mask)
+        x, enc_self_attns = self.self_attn(x, x, x, attn_mask=self_attn_mask, query_mask=query_mask)
+        #x, enc_self_attns = self.self_attn(query=x, key=x, value=x, key_padding_mask=encoder_padding_mask)
         # enc_output: (B_q, L_q, d_model), enc_self_attns: (B_q, L_q, L_k)
 
         x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
@@ -115,22 +119,26 @@ class SelfAttEncoder(nn.Module):
 
         batch_size, src_L = src_seq.size()
         # word embedding look up
-        _, enc_output = self.embed(src_seq)
+        _, x = self.embed(src_seq)
         #nlayer_outputs, nlayer_attns = [], []
         src_self_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(batch_size, src_L, src_L)
+        #if src_mask is not None: src_mask = 1 - src_mask.byte()
+        #x = x.transpose(0, 1)
         for enc_layer in self.layer_stack:
             # enc_output: (B_q, L_q, d_model), enc_self_attns: (B, L_q, L_k)
-            enc_output, enc_self_attns = enc_layer(enc_output, src_self_attn_mask)
+            x, enc_self_attns = enc_layer(x, src_self_attn_mask, query_mask=src_mask)
+            #x, enc_self_attns = enc_layer(x, src_mask)
             #nlayer_outputs += [enc_output]
             #nlayer_attns += [enc_self_attns]
+        #x = x.transpose(0, 1)
 
         if self.encoder_normalize_before is True:
-            enc_output = self.layer_norm(enc_output)    # layer norm for the last layer output
+            x = self.layer_norm(x)    # layer norm for the last layer output
 
         # nlayer_outputs:   n_layers: [ [batch_size, src_L, d_model], ... ]
         # nlayer_attns:     n_layers: [ [batch_size, src_L, src_L], ... ]
         # one_enc_self_attn:          [batch_size, src_L, src_L]
         #return (enc_output, nlayer_attns)
-        return enc_output, enc_self_attns
+        return x, enc_self_attns
 
 

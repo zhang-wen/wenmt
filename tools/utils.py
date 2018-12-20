@@ -299,13 +299,14 @@ def filter_reidx(best_trans, tV_i2w=None, attent_matrix=None, ifmv=False, ptv=No
     remove_ids, filter_ids = [], []
     for idx in range(1, len(true_idx)):
         widx = true_idx[idx]
-        if widx == BOS or widx == EOS:
+        if widx == BOS or widx == EOS or widx == PAD:
             remove_ids.append(idx - 1)
         else:
             filter_ids.append(widx)
     #true_idx = filter(lambda y: y != BOS and y != EOS, true_idx)
 
-    return idx2sent(filter_ids, tV_i2w), filter_ids, numpy.delete(attent_matrix, remove_ids, 0)
+    return idx2sent(filter_ids, tV_i2w), filter_ids, idx2sent(true_idx, tV_i2w), \
+            true_idx, numpy.delete(attent_matrix, remove_ids, 0)
 
 def sent_filter(sent):
 

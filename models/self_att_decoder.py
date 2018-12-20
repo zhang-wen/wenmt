@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from tools.utils import MAX_SEQ_SIZE, wlog, PAD
 from .nn_utils import PositionwiseFeedForward
 from .attention import MultiHeadAttention
+from .attention import MultiheadAttention
+np.set_printoptions(threshold=np.nan)
 
 '''
 Get an attention mask to avoid using the subsequent info.
@@ -20,6 +22,10 @@ def get_attn_future_mask(size):
     future_mask = tc.from_numpy(future_mask)
 
     return future_mask
+
+def fill_with_neg_inf(t):
+    """FP16-compatible function that fills a tensor with -inf."""
+    return t.float().fill_(float('-inf')).type_as(t)
 
 '''
 Compose with three layers
@@ -51,6 +57,7 @@ class SelfAttDecoderLayer(nn.Module):
         self.self_attn_type = self_attn_type
         if self_attn_type == 'scaled-dot':
             self.self_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
+            #self.self_attn = MultiheadAttention(d_model, n_head, dropout=att_dropout)
         elif self_attn_type == 'average':
             self.self_attn = AverageAttention(d_model, dropout_prob=att_dropout)
 
@@ -58,11 +65,14 @@ class SelfAttDecoderLayer(nn.Module):
 
         self.layer_norm_1 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.trg_src_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
+        #self.trg_src_attn = MultiheadAttention(d_model, n_head, dropout=att_dropout)
 
         self.layer_norm_2 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
 
-    def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None):
+    def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None, query_mask=None):
+    #def forward(self, x, encoder_out, encoder_padding_mask, incremental_state=None,
+    #            self_attn_mask=None, self_attn_padding_mask=None):
         '''
         Args:
             x (FloatTensor):                [batch_size, trg_len, d_model]
@@ -82,7 +92,19 @@ class SelfAttDecoderLayer(nn.Module):
 
         # trg_self_attn_mask: (batch_size, trg_len, trg_len)
         if self.self_attn_type == 'scaled-dot':
-            x, trg_self_attns = self.self_attn(x, x, x, attn_mask=trg_self_attn_mask)
+            x, trg_self_attns = self.self_attn(x, x, x, attn_mask=trg_self_attn_mask,
+                                               query_mask=query_mask)
+            '''
+            x, trg_self_attns = self.self_attn(
+                query=x,
+                key=x,
+                value=x,
+                key_padding_mask=self_attn_padding_mask,
+                incremental_state=None,
+                need_weights=False,
+                attn_mask=self_attn_mask,
+            )
+            '''
             # query:                [batch_size, trg_len, d_model]
             # trg_self_attns:       [batch_size, n_head, trg_len, trg_len]
             # one_dec_self_attn:    [batch_size, trg_len, trg_len]
@@ -101,7 +123,18 @@ class SelfAttDecoderLayer(nn.Module):
             x = self.layer_norm_1(x)   # before 'n' for preprocess
 
         # trg_src_attn_mask: (batch_size, trg_len, src_len)
-        x, trg_src_attns = self.trg_src_attn(enc_output, enc_output, x, attn_mask=trg_src_attn_mask)
+        x, trg_src_attns = self.trg_src_attn(enc_output, enc_output, x, attn_mask=trg_src_attn_mask, query_mask=query_mask)
+        '''
+        x, trg_src_attns = self.trg_src_attn(
+            query=x,
+            key=encoder_out,
+            value=encoder_out,
+            key_padding_mask=encoder_padding_mask,
+            incremental_state=incremental_state,
+            static_kv=True,
+            need_weights=(not self.training and True),
+        )
+        '''
         # x:                    [batch_size, trg_len, d_model]
         # trg_src_attns:        [batch_size, trg_len, src_len]
 
@@ -181,29 +214,47 @@ class SelfAttDecoder(nn.Module):
                 [0, 0, 0]]], dtype=uint8)
         '''
         trg_src_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(src_B, trg_L, src_L)
+        #print('ddddddddddddddddddddd')
+        #print(trg_src_attn_mask.size())
+        #print(trg_src_attn_mask.detach().cpu().numpy())
         trg_self_attn_mask = None if trg_mask is None else trg_mask.unsqueeze(1).expand(trg_B, trg_L, trg_L)
-
         with tc.no_grad():
-            if trg_self_attn_mask is not None:
+            if trg_mask is not None:
                 future_mask = tc.tril(tc.ones(trg_L, trg_L), diagonal=0, out=None).cuda()
                 trg_self_attn_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 1)
-
-        _, dec_output = self.trg_word_emb(trg_seq)
+        _, x = self.trg_word_emb(trg_seq)
 
         #nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []
+        #incremental_state = None
+        #x = x.transpose(0, 1)
+        #if src_mask is not None: src_mask = 1 - src_mask.byte()
         for dec_layer in self.layer_stack:
-            dec_output, trg_self_attns, trg_src_attns = dec_layer(
-                dec_output, enc_output,
+            x, trg_self_attns, trg_src_attns = dec_layer(
+                x, enc_output,
                 trg_self_attn_mask=trg_self_attn_mask,
-                trg_src_attn_mask=trg_src_attn_mask)
+                trg_src_attn_mask=trg_src_attn_mask,
+                query_mask=trg_mask)
+            #x, trg_self_attns, trg_src_attns = dec_layer(
+            #    x, enc_output, src_mask, incremental_state,
+            #    self_attn_mask=self.buffered_future_mask(x) if incremental_state is None else None,
+            #)
             #nlayer_outputs += [dec_output]
             #nlayer_self_attns += [trg_self_attns]
             #nlayer_attns += [trg_src_attns]
+        #x = x.transpose(0, 1)
 
         if self.decoder_normalize_before is True:
-            dec_output = self.layer_norm(dec_output)    # layer norm for the last layer output
+            x = self.layer_norm(x)    # layer norm for the last layer output
 
         #return (dec_output, nlayer_self_attns, nlayer_attns)
-        return dec_output, trg_self_attns, trg_src_attns
+        return x, trg_self_attns, trg_src_attns
+
+    def buffered_future_mask(self, tensor):
+        dim = tensor.size(0)
+        if not hasattr(self, '_future_mask') or self._future_mask is None or self._future_mask.device != tensor.device:
+            self._future_mask = tc.triu(fill_with_neg_inf(tensor.new(dim, dim)), 1)
+        if self._future_mask.size(0) < dim:
+            self._future_mask = tc.triu(fill_with_neg_inf(self._future_mask.resize_(dim, dim)), 1)
+        return self._future_mask[:dim, :dim]
 
 

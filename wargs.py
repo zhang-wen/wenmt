@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'toy', 'gru_tiny'
+dataset, model_config = 'toy', 't2t_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -35,7 +35,7 @@ if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 2, 2
+    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 3, 3
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
     learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 4000, 0.08, 0.98
     warmup_init_lr, min_lr = 1e-07, 1e-09
@@ -109,8 +109,8 @@ elif dataset == 'deen':
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
 elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
-    #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
+    val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
