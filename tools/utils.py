@@ -571,7 +571,7 @@ def ss_prob_decay(i):
 
     return prob_i
 
-from tools.bleu import *
+from tools.mteval_bleu import *
 def batch_search_oracle(B_hypos_list, y_LB, y_mask_LB):
 
     #print B_hypos_list

@@ -11,8 +11,8 @@ from shutil import copyfile
 
 import wargs
 from tools.utils import *
-from tools.bleu import bleu_file
-from tools.multibleu import print_multi_bleu
+from tools.mteval_bleu import mteval_bleu_file
+from tools.multi_bleu import multi_bleu_file
 numpy.set_printoptions(threshold=numpy.nan)
 
 if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
@@ -285,12 +285,12 @@ class Translator(object):
             wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
             wlog('done')
-            mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
+            mteval_bleu_opost = mteval_bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
-        mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
-        multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
-        #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
+        mteval_bleu = mteval_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
+        multi_bleu = multi_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
+        #mteval_bleu = mteval_bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, '{}{}_{}_{}.txt'.format(
             out_fname, '_char' if wargs.char_bleu is True else '', mteval_bleu, multi_bleu))
 

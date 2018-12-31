@@ -89,8 +89,6 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=F
         refs_lines.append(ref_lines)
 
     sent_num = len(src_lines)
-    #hypo = open(trans_fpath, 'r').read().strip()
-    #refs = [open(ref_fpath, 'r').read().strip() for ref_fpath in ref_fpaths]
     assert sent_num == len(hyp_lines) == len(refs_lines[0]), 'file length dismatch'
 
     ref_cnt = len(ref_fpaths)
@@ -119,9 +117,9 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=F
     bleus = [None] * num_intervals
 
     for interval_idx in range(num_intervals):
-        hyp = '\n'.join(inter_hyps[interval_idx])
-        refs = ['\n'.join(inter_refs[interval_idx][ref_idx]) for ref_idx in range(ref_cnt)]
-        result = bleu(hyp, refs, ngram, cased=cased, char=char)
+        cand_lines = inter_hyps[interval_idx]
+        refs_lines = [inter_refs[interval_idx][ref_idx] for ref_idx in range(ref_cnt)]
+        result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char)
         result = float('%.2f' % (result * 100))
         bleus[interval_idx] = result
 
@@ -199,76 +197,71 @@ def sentence2dict(sentence, n):
                 result[gram] = 1
     return result
 
-def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
+def mt_eval_bleu(cand_lines, refs_lines, n=4, logfun=wlog, cased=False, char=False):
     '''
         Calculate BLEU score given translation and references.
 
-        :type hypo_c: string
-        :param hypo_c: the translations
+        :type cand_lines: [sent_0, sent_1, ...]
+        :param cand_lines: the translations
 
-        :type refs_c: list
-        :param refs_c: the list of references
+        :type refs_lines: [[ref0_sent_0, ref0_sent_1, ...], [ref1_sent_0, ref1_sent_1, ...], [], []]
+        :param refs_lines: the list of references
 
         :type n: int
         :param n: maximum length of counted n-grams
     '''
-    #hypo_c="today weather very good", refs_c=["today weather good", "would rain"],n=4
+    #cand_c="today weather very good", refs_lines=["today weather good", "would rain"],n=4
     correctgram_count = [0] * n
     ngram_count = [0] * n
-    hypo_sen = hypo_c.split('\n')
-    refs_sen = [refs_c[i].split('\n') for i in range(len(refs_c))]
-    hypo_length = 0
+    cand_length = 0
     ref_length = 0
-    #print hypo_sen
-    #print len(hypo_sen)
-    for num in range(len(hypo_sen)):
+    for sidx in range(len(cand_lines)):
 
-        hypo = hypo_sen[num]
-        if char is True: hypo = ' '.join(zh_to_chars(hypo.decode('utf-8')))
-        else: hypo = token(hypo, cased)
+        cand_line = cand_lines[sidx].strip(' ')
+        if char is True: cand_line = ' '.join(zh_to_chars(cand_line.decode('utf-8')))
+        else: cand_line = token(cand_line, cased)
 
-        h_length = len(hypo.split(' '))
+        h_length = len(cand_line.split(' '))
 
-        if char is True: refs = [' '.join(zh_to_chars(refs_sen[i][num].decode('utf-8'))) for i in range(len(refs_c))]
-        else: refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
+        if char is True: refs = [' '.join(zh_to_chars(ref_lines[sidx].decode('utf-8'))) for ref_lines in refs_lines]
+        else: refs = [token(ref_lines[sidx], cased) for ref_lines in refs_lines]
 
         # this is same with mteval-v11b.pl, using the length of the shortest reference
-        ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
+        ref_lengths = sorted([len(ref.split(' ')) for ref in refs])
         ref_length += ref_lengths[0]
-        hypo_length += h_length
+        cand_length += h_length
 
         # why this ? more strict
-        #hypo_length += (h_length if h_length < ref_lengths[0] else ref_lengths[0])
+        #cand_length += (h_length if h_length < ref_lengths[0] else ref_lengths[0])
 
-        #print ref_lengths[0], ref_length, h_length, hypo_length
+        #print ref_lengths[0], ref_length, h_length, cand_length
 
-        # another choice is use the minimal length difference of hypothesis and four references !!
+        # another choice is use the minimal length difference of candthesis and four references !!
         #ref_distances = [abs(r - h_length) for r in ref_lengths]
         #ref_length += ref_lengths[numpy.argmin(ref_distances)]
         '''
-        if num == 0:
+        if sidx == 0:
             print h_length
             print ref_lengths[0]
-            for i in range(len(refs_c)):
-                print token(refs_sen[i][num]), len(token(refs_sen[i][num]).split(' '))
+            for ref_lines in refs_lines:
+                print token(ref_lines[sidx]), len(token(ref_lines[sidx]).split(' '))
             print ref_lengths[numpy.argmin(ref_distances)]
         '''
         refs_dict = {}
-        for i in range(len(refs)):  # four refs for one sentence
-            ref = refs[i]
+        for ref in refs:  # four refs for one sentence
             ref_dict = sentence2dict(ref, n)
             refs_dict = merge_dict(refs_dict, ref_dict)
 
-        #if num == 0:
+        #if sidx == 0:
         #    for key in refs_dict.keys():
         #        print key, refs_dict[key]
-        hypo_dict = sentence2dict(hypo, n)
+        cand_dict = sentence2dict(cand_line, n)
 
-        for key in hypo_dict:
-            value = hypo_dict[key]
+        for key in cand_dict:
+            value = cand_dict[key]
             length = len(key.split(' '))
             ngram_count[length - 1] += value
-            #if num == 0:
+            #if sidx == 0:
             #    print key, value, length
             #    print min(value, refs_dict[key])
             if key in refs_dict:
@@ -277,7 +270,7 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
     result = 0.
     bleu_n = [0.] * n
     #if correctgram_count[0] == 0: return 0.
-    logfun('Total words count, ref {}, hyp {}'.format(ref_length, hypo_length))
+    logfun('Total words count, ref {}, cand {}'.format(ref_length, cand_length))
     for i in range(n):
         logfun('{}-gram | ref {:8d} | match {:8d}'.format(i+1, ngram_count[i], correctgram_count[i]), 0)
         if correctgram_count[i] == 0:
@@ -293,43 +286,41 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
     #bleu = geometric_mean(precisions) * bp     # same with mean function ?
 
     # there are no brevity penalty in mteval-v11b.pl, so with bp BLEU is a little lower
-    if hypo_length < ref_length:
-        bp = math.exp(1 - ref_length / hypo_length) if hypo_length != 0 else 0
+    if cand_length < ref_length:
+        bp = math.exp(1 - ref_length / cand_length) if cand_length != 0 else 0
 
     BLEU = bp * math.exp(result)
-    logfun('BP={}, ratio={}, BLEU={}'.format(bp, hypo_length / ref_length, BLEU))
+    logfun('BP={}, ratio={}, BLEU={}'.format(bp, cand_length / ref_length, BLEU))
 
     return BLEU
 
-def bleu_file(hypo, refs, ngram=4, cased=False, char=False):
+def mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=False, char=False):
 
     '''
         Calculate the BLEU score given translation files and reference files.
 
-        :type hypo: string
-        :param hypo: the path to translation file
-
-        :type refs: list
-        :param refs: the list of path to reference files
+        :type cand_file: string
+        :param ref_fpaths: the path to translation file
+        :type ref_fpaths: list
+        :param ref_fpaths: the list of path to reference files
     '''
 
     wlog('\n' + '#' * 30 + ' mteval-v11b ' + '#' * 30)
     wlog('Calculating case-{}sensitive {}-gram BLEU ...'.format('' if cased else 'in', ngram))
-    wlog('\tcandidate file: {}'.format(hypo))
+    wlog('\tcandidate file: {}'.format(cand_file))
     wlog('\treferences file:')
-    for ref in refs: wlog('\t\t{}'.format(ref))
+    for ref_fpath in ref_fpaths: wlog('\t\t{}'.format(ref_fpath))
 
-    #hypo = open(hypo, 'r').read().strip('\n')
-    #refs = [open(ref_fpath, 'r').read().strip('\n') for ref_fpath in refs]
-    hypo = open(hypo, 'r').read().strip()
-    refs = [open(ref_fpath, 'r').read().strip() for ref_fpath in refs]
+    cand_f = open(cand_file, 'r')
+    refs_f = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
 
-    #print type(hypo)
-    #print hypo.endswith('\n')
-    #print type(refs)
-    #print type(refs[0])
-    result = bleu(hypo, refs, ngram, cased=cased, char=char)
+    cand_lines = cand_f.readlines()
+    refs_lines = [ref_f.readlines() for ref_f in refs_f]
+    result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char)
     result = float('%.2f' % (result * 100))
+
+    cand_f.close()
+    for ref_f in refs_f: ref_f.close()
 
     return result
 
@@ -346,12 +337,12 @@ if __name__ == "__main__":
         if not os.path.exists(ref_fpath): continue
         ref_fpaths.append(ref_fpath)
 
-    #print bleu_file('work0/hyp.seg.plain', ref_fpaths)
-    #print bleu_file('data1/hyp.seg.plain', ref_fpaths)
-    #print bleu_file('data2/hyp.seg.plain', ref_fpaths)
-    #print bleu_file('data3/hyp.seg.plain', ref_fpaths)
-    #print bleu_file('out', ref_fpaths)
-    print bleu_file('trans_e10_upd15008_b10m1_bch1_32.64.txt', ref_fpaths)
+    #print mteval_bleu_file('work0/hyp.seg.plain', ref_fpaths)
+    #print mteval_bleu_file('data1/hyp.seg.plain', ref_fpaths)
+    #print mteval_bleu_file('data2/hyp.seg.plain', ref_fpaths)
+    #print mteval_bleu_file('data3/hyp.seg.plain', ref_fpaths)
+    #print mteval_bleu_file('out', ref_fpaths)
+    print mteval_bleu_file('trans_e10_upd15008_b10m1_bch1_32.64.txt', ref_fpaths)
     '''
 
     import os
@@ -384,7 +375,7 @@ if __name__ == "__main__":
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
+    mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
 
     src_fpath = './nist03.src.plain.u8.a2b.stanseg'
     #src_fpath = './src.3'

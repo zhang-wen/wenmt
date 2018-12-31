@@ -33,7 +33,7 @@ input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
 encoder_normalize_before, decoder_normalize_before = False, False
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
+    lr_update_way = 'chen'  # 'noam' or 'chen' or 'invsqrt'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 3, 3
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3

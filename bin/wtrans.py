@@ -90,7 +90,7 @@ if __name__ == '__main__':
     nmtModel = build_NMT(src_emb, trg_emb)
     classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb, loss_norm=wargs.loss_norm,
                             label_smoothing=wargs.label_smoothing, emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
-    nmtModel.classifier = classifier
+    nmtModel.decoder.classifier = classifier
 
     if wargs.gpu_id is not None:
         wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)

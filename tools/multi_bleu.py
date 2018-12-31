@@ -121,23 +121,22 @@ def tokenize_lower(txt, char=False):
     else: txt = txt.split()
     return txt
 
-def multi_bleu(candidates, all_references, tokenize_fn=tokenize, ngram=4, char=False):
+def multi_bleu(cand_lines, refs_lines, tokenize_fn=tokenize, ngram=4, char=False):
     correct = [0] * ngram
     total = [0] * ngram
     cand_tot_length = 0
     ref_closest_length = 0
-    candidates = candidates.split('\n')
-    all_references = [all_references[i].split('\n') for i in range(len(all_references))]
-    assert len(candidates) == len(all_references[0]), 'dismatch len'
-    num, refs_num = len(candidates), len(all_references)
+    assert len(cand_lines) == len(refs_lines[0]), \
+            'dismatch len, cand {}, ref0_f {}'.format(len(cand_lines), len(refs_lines[0]))
+    num, refs_num = len(cand_lines), len(refs_lines)
 
-    #for candidate, references in zip(candidates, zip(*all_references)):
+    #for candidate, references in zip(cand_lines, zip(*refs_lines)):
     for k in range(num):
-        candidate = candidates[k]
+        candidate = cand_lines[k]
         candidate = tokenize_fn(candidate, char)
         references = []
         for ref_idx in range(refs_num):
-            references.append(tokenize_fn(all_references[ref_idx][k], char))
+            references.append(tokenize_fn(refs_lines[ref_idx][k], char))
         #references = map(tokenize_fn, references, [char for _ in references])
         #print(candidate)
         #print(references)
@@ -173,7 +172,7 @@ def multi_bleu(candidates, all_references, tokenize_fn=tokenize, ngram=4, char=F
 
     return score, prec_pc, brevity_penalty, cand_tot_length, ref_closest_length
 
-def print_multi_bleu(cand_file, ref_fpaths, cased=False, ngram=4, char=False):
+def multi_bleu_file(cand_file, ref_fpaths, cased=False, ngram=4, char=False):
 
     wlog('\n' + '#' * 30 + ' multi-bleu ' + '#' * 30)
     tokenize_fn = tokenize if cased is True else tokenize_lower
@@ -184,11 +183,11 @@ def print_multi_bleu(cand_file, ref_fpaths, cased=False, ngram=4, char=False):
 
     cand_f = open(cand_file, 'r')
     refs_f = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
-    cand = cand_f.read().strip()
-    refs = [ref_f.read().strip() for ref_f in refs_f]
 
+    cand_lines = cand_f.readlines()
+    refs_lines = [ref_f.readlines() for ref_f in refs_f]
     score, precisions, brevity_penalty, cand_tot_length, ref_closest_length = \
-        multi_bleu(cand, refs, tokenize_fn, ngram, char=char)
+        multi_bleu(cand_lines, refs_lines, tokenize_fn, ngram, char=char)
 
     cand_f.close()
     for ref_f in refs_f: ref_f.close()
@@ -229,7 +228,7 @@ if __name__ == "__main__":
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    print_multi_bleu(cand_file, ref_fpaths, cased, 4)
+    multi_bleu_file(cand_file, ref_fpaths, cased, 4)
 
 
 

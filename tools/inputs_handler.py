@@ -14,7 +14,7 @@ import wargs
 from tools.utils import *
 from tools.inputs import *
 from tools.vocab import Vocab
-from tools.bleu import zh_to_chars
+from tools.mteval_bleu import zh_to_chars
 
 def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
 
