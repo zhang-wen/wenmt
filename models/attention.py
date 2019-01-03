@@ -174,7 +174,9 @@ class MultiHeadAttention(nn.Module):
             #print(attn.detach().cpu().numpy())
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn.masked_fill_(1 - attn_mask, float('-inf'))
+            #attn.masked_fill_(1 - attn_mask, float('-inf'))
+            #attn.masked_fill_(1, float('-inf'))
+            attn = attn.masked_fill(attn_mask, -1e18)
             #print(attn.size())
             #print(attn.detach().cpu().numpy())
 

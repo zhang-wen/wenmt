@@ -5,7 +5,7 @@ from tools.utils import *
 import torch.nn.functional as F
 from .nn_utils import PositionwiseFeedForward
 from .attention import MultiHeadAttention
-from .attention import MultiheadAttention
+#from .attention import MultiheadAttention
 
 '''
     Args:
@@ -121,9 +121,8 @@ class SelfAttEncoder(nn.Module):
         # word embedding look up
         _, x = self.embed(src_seq)
         #nlayer_outputs, nlayer_attns = [], []
-        src_self_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(batch_size, src_L, src_L)
-        #if src_mask is not None: src_mask = 1 - src_mask.byte()
-        #x = x.transpose(0, 1)
+        #src_self_attn_mask = None if src_mask is None else (1-src_mask).byte().unsqueeze(1).expand(batch_size, src_L, src_L)
+        src_self_attn_mask = src_seq.data.eq(PAD).byte().unsqueeze(1).expand(batch_size, src_L, src_L)  # [B, 1, T_tgt]
         for enc_layer in self.layer_stack:
             # enc_output: (B_q, L_q, d_model), enc_self_attns: (B, L_q, L_k)
             x, enc_self_attns = enc_layer(x, src_self_attn_mask, query_mask=src_mask)

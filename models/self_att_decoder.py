@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from tools.utils import MAX_SEQ_SIZE, wlog, PAD
 from .nn_utils import PositionwiseFeedForward
 from .attention import MultiHeadAttention
-from .attention import MultiheadAttention
+#from .attention import MultiheadAttention
 np.set_printoptions(threshold=np.nan)
 
 '''
@@ -17,7 +17,7 @@ Returns: (LongTensor): future_mask [1, d_model, d_model]
 '''
 def get_attn_future_mask(size):
 
-    attn_shape = (size, size)
+    attn_shape = (1, size, size)
     future_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
     future_mask = tc.from_numpy(future_mask)
 
@@ -69,6 +69,10 @@ class SelfAttDecoderLayer(nn.Module):
 
         self.layer_norm_2 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
+        mask = get_attn_future_mask(MAX_SEQ_SIZE)
+        # Register self.mask as a buffer in TransformerDecoderLayer, so
+        # it gets TransformerDecoderLayer's cuda behavior automatically.
+        self.register_buffer('mask', mask)
 
     def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None, query_mask=None):
     #def forward(self, x, encoder_out, encoder_padding_mask, incremental_state=None,
@@ -85,6 +89,10 @@ class SelfAttDecoderLayer(nn.Module):
             trg_src_attns:      [batch_size, n_head, trg_len, src_len]
             one_dec_enc_attn:   [batch_size, trg_len, src_len]
         '''
+        #if query_mask is not None:
+        trg_self_attn_mask = tc.gt(trg_self_attn_mask +
+                         self.mask[:, :trg_self_attn_mask.size(-1),
+                                   :trg_self_attn_mask.size(-1)], 0)
         # target self-attention
         residual = x
         if self.decoder_normalize_before is True:
@@ -213,15 +221,16 @@ class SelfAttDecoder(nn.Module):
                 [0, 0, 1],
                 [0, 0, 0]]], dtype=uint8)
         '''
-        trg_src_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(src_B, trg_L, src_L)
-        #print('ddddddddddddddddddddd')
-        #print(trg_src_attn_mask.size())
-        #print(trg_src_attn_mask.detach().cpu().numpy())
-        trg_self_attn_mask = None if trg_mask is None else trg_mask.unsqueeze(1).expand(trg_B, trg_L, trg_L)
+        #trg_self_attn_mask = None if trg_mask is None else (1-trg_mask).byte().unsqueeze(1).expand(trg_B, trg_L, trg_L)
+        #trg_src_attn_mask = None if src_mask is None else (1-src_mask).byte().unsqueeze(1).expand(src_B, trg_L, src_L)
+        trg_self_attn_mask = trg_seq.data.eq(PAD).byte().unsqueeze(1).expand(trg_B, trg_L, trg_L)  # [B, 1, T_tgt]
+        trg_src_attn_mask = src_seq.data.eq(PAD).byte().unsqueeze(1).expand(src_B, trg_L, src_L)  # [B, 1, T_src]
+        '''
         with tc.no_grad():
             if trg_mask is not None:
                 future_mask = tc.tril(tc.ones(trg_L, trg_L), diagonal=0, out=None).cuda()
                 trg_self_attn_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 1)
+        '''
         _, x = self.trg_word_emb(trg_seq)
 
         #nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []

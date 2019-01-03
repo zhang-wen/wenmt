@@ -24,7 +24,7 @@ def str1(content, encoding='utf-8'):
 
 #DEBUG = True
 DEBUG = False
-MAX_SEQ_SIZE = 1024
+MAX_SEQ_SIZE = 5000
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
