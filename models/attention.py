@@ -42,7 +42,7 @@ class Multihead_Additive_Attention(nn.Module):
         #self.mSoftMax = MaskSoftmax()
         dim_per_head = dec_hid_size // n_head
         self.a1 = Linear(dim_per_head, 1, bias=False)
-        self.final_proj = Linear(2 * dec_hid_size, 2 * dec_hid_size, bias=True)
+        self.final_proj = Linear(dec_hid_size, dec_hid_size, bias=True)
 
     '''
         Compute the context vector and the attention vectors.

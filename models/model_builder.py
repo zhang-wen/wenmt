@@ -106,7 +106,7 @@ def build_decoder(trg_emb):
                               residual_dropout = wargs.residual_dropout,
                               relu_dropout = wargs.relu_dropout,
                               proj_share_weight = wargs.proj_share_weight,
-                              decoder_normalize_before=wargs.decoder_normalize_before)
+                              decoder_normalize_before = wargs.decoder_normalize_before)
     elif wargs.encoder_type == 'tgru':
         from models.tgru_decoder import StackedTransDecoder
         return StackedTransDecoder(trg_emb = trg_emb,
