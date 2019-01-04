@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'toy', 'gru_tiny'
+dataset, model_config = 'ende', 'gru_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -86,10 +86,9 @@ if model_config == 'gru_tiny':
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 4, 4
+    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 6, 6
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 8000, 64000, 8000
-    snip_size = 5
+    snip_size = 20
 if model_config == 'gru_big':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 1024, 2, 2
@@ -122,11 +121,12 @@ elif dataset == 'uyzh':
     val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
     val_src_suffix, val_src_suffix, val_prefix, tests_prefix = '8kbpe.src', 'uy.src', 'dev700', ['tst861']
 elif dataset == 'ende':
-    val_tst_dir = '/home4/wen/3.corpus/wmt14-ende/devtst/'
-    val_src_suffix, val_ref_suffix = 'en.tc.37kbpe', 'de.tc'
-    val_prefix, tests_prefix = 'newstest1213', ['newstest2014']
+    val_tst_dir = '/home/wen/3.corpus/ende37kbpe/'
+    val_src_suffix, val_ref_suffix = 'tc.en.37kbpe', 'tc.de'
+    val_prefix, tests_prefix = 'newstest2013', ['newstest2014']
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
     with_bpe, cased = True, True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
+    s_step_decay, e_step_decay, warmup_steps = 200000, 1200000, 8000
 
 proj_share_weight, embs_share_weight = False, False
 position_encoding = True if (encoder_type in ('att','tgru') and decoder_type in ('att','tgru')) else False
