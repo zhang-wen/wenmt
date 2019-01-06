@@ -30,7 +30,7 @@ class StackedGRUDecoder(nn.Module):
         #self.cgru_cell = nn.GRUCell(enc_hid_size, dec_hid_size, bias=True)
         self.layer_stack = nn.ModuleList([
             nn.GRUCell(enc_hid_size, dec_hid_size, bias=True)
-            for _ in range(n_layers)])
+            for _ in range(n_layers - 1)])
 
         self.n_layers = n_layers
         if attention_type == 'additive':
@@ -105,14 +105,14 @@ class StackedGRUDecoder(nn.Module):
             _, y_tm1 = self.trg_word_emb(y_tm1)
 
         s_t = self.gru_cell(y_tm1, s_tm1)
-        if y_mask is not None: s_t = s_t * y_mask[:, None]
+        #if y_mask is not None: s_t = s_t * y_mask[:, None]
         # s_t: (batch_size, d_dec_hid)
 
         # alpha:   [batch_size, n_head, key_len] or [batch_size, key_len]
         # context: [batch_size, 2 * enc_hid_size]
         for i, dec_layer in enumerate(self.layer_stack):
             alpha, context = self.attention(s_t, xs_h, uh, xs_mask)
-            if y_mask is not None: context = context * y_mask[:, None]
+            #if y_mask is not None: context = context * y_mask[:, None]
             s_t = dec_layer(context, s_t)
         if y_mask is not None: s_t = s_t * y_mask[:, None]
 

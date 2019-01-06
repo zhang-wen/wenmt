@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'ende', 'gru_base'
+dataset, model_config = 'toy', 'gru_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -29,7 +29,7 @@ d_dec_hid, d_model = 512, 512
 eval_valid_from = 500 if eval_small else 50000
 eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
-input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
+input_dropout, rnn_dropout, output_dropout = 0.5, 0., 0.5
 encoder_normalize_before, decoder_normalize_before = False, False
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
@@ -78,7 +78,7 @@ if model_config == 'tgru_big':
     snip_size, s_step_decay, e_step_decay = 1, 4000, 32000
 if model_config == 'gru_tiny':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
+    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 3, 3
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 1000, 5000, 8000
     eval_valid_from, eval_valid_freq = 3000, 300
@@ -88,7 +88,7 @@ if model_config == 'gru_base':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 6, 6
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
-    snip_size = 20
+    snip_size = 1
 if model_config == 'gru_big':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 1024, 2, 2
