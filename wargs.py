@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'toy', 'gru_tiny'
+dataset, model_config = 'zhen', 'gru_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -29,7 +29,7 @@ d_dec_hid, d_model = 512, 512
 eval_valid_from = 500 if eval_small else 50000
 eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
-input_dropout, rnn_dropout, output_dropout = 0.5, 0., 0.5
+input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
 encoder_normalize_before, decoder_normalize_before = False, False
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
@@ -86,9 +86,10 @@ if model_config == 'gru_tiny':
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 6, 6
+    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 4, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
-    snip_size = 1
+    s_step_decay, e_step_decay, warmup_steps = 8000, 96000, 8000
+    #snip_size = 1
 if model_config == 'gru_big':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 1024, 2, 2
@@ -108,8 +109,8 @@ elif dataset == 'deen':
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
 elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
-    val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
+    val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
+    #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']

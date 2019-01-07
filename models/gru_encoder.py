@@ -44,16 +44,15 @@ class StackedGRUEncoder(nn.Module):
                                                  hidden_size=enc_hid_size,
                                                  num_layers=1,
                                                  bias=True,
-                                                 batch_first=True,
-                                                 dropout=dropout_prob)])
+                                                 batch_first=True)])
         self.layer_stack.extend([
             nn.GRU(input_size=n_embed,
                    hidden_size=enc_hid_size,
                    num_layers=1,
                    bias=True,
-                   batch_first=True,
-                   dropout=dropout_prob)
+                   batch_first=True)
             for _ in range(n_layers - 1)])
+        self.dropout_prob = dropout_prob
 
     def forward(self, xs, xs_mask=None):
 
@@ -76,6 +75,8 @@ class StackedGRUEncoder(nn.Module):
             #for Lidx in range(src_L):
             #    h = enc_layer(inputs[Lidx], h)
             #    outputs.append(h)
+            if i != self.n_layers - 1:
+                outputs = F.dropout(outputs, p=self.dropout_prob, training=self.training)
             inputs = tc.flip(outputs, [1])
 
         if self.n_layers % 2 == 0:
