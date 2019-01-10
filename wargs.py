@@ -30,7 +30,7 @@ eval_valid_from = 500 if eval_small else 50000
 eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
 input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
-encoder_normalize_before, decoder_normalize_before = False, False
+encoder_normalize_before, decoder_normalize_before, max_epochs = False, False, 15
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
