@@ -29,7 +29,6 @@ class StackedGRUEncoder(nn.Module):
         self.enc_hid_size = enc_hid_size
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
-        '''
         self.bigru = nn.GRU(input_size=n_embed, hidden_size=self.enc_hid_size,
                             num_layers=n_layers, bias=True, batch_first=True,
                             dropout=dropout_prob, bidirectional=bidirectional)
@@ -53,15 +52,17 @@ class StackedGRUEncoder(nn.Module):
                    batch_first=True)
             for _ in range(n_layers - 1)])
         self.dropout_prob = dropout_prob
+        '''
 
     def forward(self, xs, xs_mask=None):
 
         if xs.dim() == 3: xs_e = xs
         else: x_w_e, xs_e = self.src_word_emb(xs)
-        batch_size, src_L = xs_e.size(0), xs_e.size(1)
 
-        inputs = xs_e
         #inputs = xs_e.transpose(0, 1)
+        '''
+        batch_size, src_L = xs_e.size(0), xs_e.size(1)
+        inputs = xs_e
         for i, enc_layer in enumerate(self.layer_stack):
             # xs_e: (batch_size, L_src, n_embed)
             h = tc.zeros(1, batch_size, self.enc_hid_size, requires_grad=False)
@@ -81,14 +82,15 @@ class StackedGRUEncoder(nn.Module):
 
         if self.n_layers % 2 == 0:
             outputs = tc.flip(outputs, [1])
-        #self.bigru.flatten_parameters()
+        '''
+        self.bigru.flatten_parameters()
         #if self.bidirectional is False:
         #    h0 = tc.zeros(batch_size, self.enc_hid_size, requires_grad=False)
         #else:
         #    h0 = tc.zeros(2, batch_size, self.enc_hid_size, requires_grad=False)
         #print xs_e.size(), h0.size()
         #output, hn = self.bigru(xs_e, h0)
-        #output, hn = self.bigru(xs_e)
+        outputs, _ = self.bigru(xs_e)
 
         return outputs * xs_mask[:, :, None]
 

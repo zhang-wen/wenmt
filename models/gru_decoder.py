@@ -25,29 +25,26 @@ class StackedGRUDecoder(nn.Module):
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
-        self.s_init = Linear(enc_hid_size, dec_hid_size, bias=True)
+        self.s_init = Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.gru_cell = nn.GRUCell(n_embed, dec_hid_size, bias=True)
-        #self.cgru_cell = nn.GRUCell(enc_hid_size, dec_hid_size, bias=True)
-        self.layer_stack = nn.ModuleList([
-            nn.GRUCell(enc_hid_size, dec_hid_size, bias=True)
-            for _ in range(n_layers - 1)])
+        self.cgru_cell = nn.GRUCell(2 * enc_hid_size, dec_hid_size, bias=True)
 
         self.n_layers = n_layers
         if attention_type == 'additive':
-            self.keys_transform = Linear(enc_hid_size, dec_hid_size)
+            self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size)
             from .attention import Additive_Attention
             self.attention = Additive_Attention(dec_hid_size, dec_hid_size)
         if attention_type == 'multihead_additive':
-            self.keys_transform = Linear(enc_hid_size, dec_hid_size, bias=False)
+            self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size, bias=False)
             from .attention import Multihead_Additive_Attention
             self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size)
 
         self.sigmoid = nn.Sigmoid()
         self.s_transform = Linear(dec_hid_size, dec_hid_size)
         self.y_transform = Linear(n_embed, dec_hid_size)
-        self.c_transform = Linear(dec_hid_size, dec_hid_size)
+        self.c_transform = Linear(2 * enc_hid_size, dec_hid_size)
+        self.src_transform = Linear(dec_hid_size, 2 * enc_hid_size)
         self.max_out = max_out
-        self.rnn_dropout_prob = rnn_dropout_prob
         self.out_dropout_prob = out_dropout_prob
 
     def init_state(self, annotations, xs_mask=None):
@@ -105,21 +102,16 @@ class StackedGRUDecoder(nn.Module):
             if wargs.gpu_id is not None: y_tm1 = y_tm1.cuda()
             _, y_tm1 = self.trg_word_emb(y_tm1)
 
-        s_t = self.gru_cell(y_tm1, s_tm1)
-        #if y_mask is not None: s_t = s_t * y_mask[:, None]
-        # s_t: (batch_size, d_dec_hid)
-        s_t = F.dropout(s_t, p=self.rnn_dropout_prob, training=self.training)
+        state = self.gru_cell(y_tm1, s_tm1)
+        if y_mask is not None: state = state * y_mask[:, None]
+        # state: (batch_size, d_dec_hid)
 
+        alpha, context = self.attention(state, xs_h, uh, xs_mask)
         # alpha:   [batch_size, n_head, key_len] or [batch_size, key_len]
         # context: [batch_size, 2 * enc_hid_size]
-        for i, dec_layer in enumerate(self.layer_stack):
-            alpha, context = self.attention(s_t, xs_h, uh, xs_mask)
-            if i < self.n_layers - 2:
-                context = F.dropout(context, p=self.rnn_dropout_prob, training=self.training)
-            #if y_mask is not None: context = context * y_mask[:, None]
-            s_t = dec_layer(context, s_t)
-            if i < self.n_layers - 2:
-                s_t = F.dropout(s_t, p=self.rnn_dropout_prob, training=self.training)
+        if y_mask is not None: context = context * y_mask[:, None]
+
+        s_t = self.cgru_cell(context, state)
         if y_mask is not None: s_t = s_t * y_mask[:, None]
 
         return context, s_t, y_tm1, alpha
@@ -163,6 +155,7 @@ class StackedGRUDecoder(nn.Module):
 
         # (batch_size, y_Lm1, dec_hid_size)
         logit = self.y_transform(y) + self.c_transform(c) + self.s_transform(s)
+        logit = self.src_transform(logit)
 
         if self.max_out is True:
             if logit.dim() == 2:    # for decoding

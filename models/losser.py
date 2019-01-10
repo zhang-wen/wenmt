@@ -24,7 +24,7 @@ class Classifier(nn.Module):
         if bow_loss is True:
             wlog('using the bag of words loss')
             self.sigmoid = nn.Sigmoid()
-            self.ctx_map_vocab = Linear(2 * input_size, output_size, bias=True)
+            #self.ctx_map_vocab = Linear(2 * input_size, output_size, bias=True)
             #self.softmax = MaskSoftmax()
         self.bow_loss = bow_loss
 
@@ -163,7 +163,7 @@ class Classifier(nn.Module):
             emb_loss = self.embeddingLoss(prob_BLV, gold_BL, gold_mask_BL, bow_BN, bow_mask_BN)
         if self.bow_loss is True:
             #bow_loss = self.bowLoss_based_pred(pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN)
-            pred_bow = self.ctx_map_vocab(context_BLH)  # (batch_size, y_Lm1, V)
+            pred_bow = self.map_vocab(context_BLH)  # (batch_size, y_Lm1, V)
             bow_loss = self.bowLoss_based_pred(pred_bow, gold_mask_BL, bow_BN, bow_mask_BN)
 
         pred_flat_nV = pred_BLV.view(-1, pred_BLV.size(-1))
