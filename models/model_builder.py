@@ -78,18 +78,6 @@ def build_encoder(src_emb):
                                  dropout_prob = wargs.rnn_dropout,
                                  n_layers = wargs.n_enc_layers)
     if wargs.encoder_type == 'att':
-        '''
-        from models.self_att_encoder import SelfAttEncoder
-        return SelfAttEncoder(src_emb = src_emb,
-                              n_layers = wargs.n_enc_layers,
-                              d_model = wargs.d_model,
-                              n_head = wargs.n_head,
-                              d_ff_filter = wargs.d_ff_filter,
-                              att_dropout = wargs.att_dropout,
-                              residual_dropout = wargs.residual_dropout,
-                              relu_dropout = wargs.relu_dropout,
-                              encoder_normalize_before=wargs.encoder_normalize_before)
-        '''
         from models.self_att_model import SelfAttEncoder, SelfAttEncoderLayer, \
                 PositionwiseFeedForward, clones
         from models.attention import MultiHeadedAttention
@@ -127,19 +115,6 @@ def build_decoder(trg_emb):
                                  rnn_dropout_prob = wargs.rnn_dropout,
                                  out_dropout_prob = wargs.output_dropout)
     if wargs.decoder_type == 'att':
-        '''
-        from models.self_att_decoder import SelfAttDecoder
-        return SelfAttDecoder(trg_emb = trg_emb,
-                              n_layers = wargs.n_dec_layers,
-                              d_model = wargs.d_model,
-                              n_head = wargs.n_head,
-                              d_ff_filter = wargs.d_ff_filter,
-                              att_dropout = wargs.att_dropout,
-                              residual_dropout = wargs.residual_dropout,
-                              relu_dropout = wargs.relu_dropout,
-                              proj_share_weight = wargs.proj_share_weight,
-                              decoder_normalize_before = wargs.decoder_normalize_before)
-        '''
         from models.self_att_model import SelfAttDecoder, SelfAttDecoderLayer, \
                 PositionwiseFeedForward, clones
         from models.attention import MultiHeadedAttention
