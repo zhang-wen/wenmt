@@ -31,10 +31,12 @@ class StackedGRUDecoder(nn.Module):
 
         self.n_layers = n_layers
         if attention_type == 'additive':
+            wlog('additive')
             self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size)
             from .attention import Additive_Attention
             self.attention = Additive_Attention(dec_hid_size, dec_hid_size)
         if attention_type == 'multihead_additive':
+            wlog('multihead_additive')
             self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size, bias=False)
             from .attention import Multihead_Additive_Attention
             self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size)

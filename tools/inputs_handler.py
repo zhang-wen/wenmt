@@ -16,6 +16,11 @@ from tools.inputs import *
 from tools.vocab import Vocab
 from tools.mteval_bleu import zh_to_chars
 
+defaultencoding = 'utf-8'
+if sys.getdefaultencoding() != defaultencoding:
+    reload(sys)
+    sys.setdefaultencoding(defaultencoding)
+
 def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
 
     wlog('\tmax length {}, char? {}'.format(max_seq_len, char))
@@ -36,11 +41,11 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, cha
 
 def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
 
-    assert data_file and os.path.exists(data_file), 'need file to extract vocabulary ...'
+    assert data_file and os.path.exists(data_file), 'need file to extract vocabulary {} ...'.format(data_file)
 
     vocab = Vocab()
     #with open(data_file, 'r') as f:
-    with io.open(data_file, encoding='utf-8') as f:
+    with io.open(data_file, mode='r', encoding='utf-8') as f:
         for sent in f.readlines():
             #sent = sent.strip().encode('utf-8')
             sent = sent.strip()
@@ -62,8 +67,10 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
 def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_vocab,
               shuffle=True, sort_k_batches=1, max_seq_len=50, char=False):
 
-    srcF = open(os.path.join(data_dir, '{}.{}'.format(file_prefix, src_suffix)), 'r')
-    num = len(srcF.readlines())
+    with io.open(os.path.join(data_dir, '{}.{}'.format(file_prefix,src_suffix)),
+            mode='r', encoding='utf-8') as srcF:
+        sents = srcF.readlines()
+    num = len(sents)
     srcF.close()
     point_every, number_every = int(math.ceil(num/100)), int(math.ceil(num/10))
 
@@ -74,7 +81,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
     for fname in os.listdir(data_dir):
         if fname.startswith('{}.{}'.format(file_prefix, trg_prefix)):
             wlog('\t{}'.format(os.path.join(data_dir, fname)))
-            trgFs.append(open(os.path.join(data_dir, fname), 'r'))
+            trgFs.append(io.open(os.path.join(data_dir, fname), mode='r', encoding='utf-8'))
     wlog('NOTE: Target side has {} references.'.format(len(trgFs)))
 
     idx, ignore, longer = 0, 0, 0
@@ -137,8 +144,8 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         slens = [slens[k] for k in rand_idxs]
         wlog('done.')
 
-    final_srcs, final_trgs = sort_batches(srcs, trgs, slens, wargs.batch_size, sort_k_batches)
-
+    #return srcs, trgs
+    final_srcs, final_trgs = sort_batches(srcs, trgs, slens, 100, sort_k_batches)
     return final_srcs, final_trgs
 
 def wrap_tst_data(src_data, src_vocab, char=False):

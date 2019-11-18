@@ -1,16 +1,28 @@
+import copy
 import wargs
 import torch.nn as nn
-
+from tools.utils import wlog
 
 ''' NMT model with encoder and decoder '''
 class NMTModel(nn.Module):
 
-    def __init__(self, encoder, decoder, multigpu=False):
+    def __init__(self, encoder, decoder, generator, bowMapper=None, multigpu=False):
 
         self.multigpu = multigpu
         super(NMTModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
+        self.bowMapper = bowMapper
+        self.generator = generator
+
+    def encode(self, src, src_mask):
+        return self.encoder(src, src_mask)
+
+    def decode(self, trg, enc_output, src_mask):
+        return self.decoder(trg, enc_output, src_mask)
+
+    def generate(self, model_output):
+        return self.generator(model_output)
 
     def forward(self, src, trg, src_mask=None, trg_mask=None, ss_prob=1.):
         '''
@@ -30,9 +42,15 @@ class NMTModel(nn.Module):
             logits, attends, contexts = results['logit'], results['attend'], results['context']
         if wargs.encoder_type == 'att':
             enc_output, _ = self.encoder(src, src_mask)
-            logits, _, attends = self.decoder(trg, src, enc_output, trg_mask, src_mask)
+            logits, _, attends = self.decoder(trg, enc_output, src_mask)
+            #logits, _, attends = self.decoder(trg, src, enc_output, trg_mask, src_mask)
             #logits, _, nlayer_attns = self.decoder(trg, src, enc_output)
             #attends = nlayer_attns[-1]
+            #attends = attends.max(dim=1)
+            attends = attends.mean(dim=1)
+            contexts = (attends[:, :, :, None] * enc_output[:, None, :, :]).sum(2)
+            contexts = contexts * trg_mask[:, :, None]
+            #print('contexts: {}'.format(contexts.size()))
         elif wargs.encoder_type == 'tgru':
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
@@ -60,6 +78,7 @@ def build_encoder(src_emb):
                                  dropout_prob = wargs.rnn_dropout,
                                  n_layers = wargs.n_enc_layers)
     if wargs.encoder_type == 'att':
+        '''
         from models.self_att_encoder import SelfAttEncoder
         return SelfAttEncoder(src_emb = src_emb,
                               n_layers = wargs.n_enc_layers,
@@ -70,6 +89,18 @@ def build_encoder(src_emb):
                               residual_dropout = wargs.residual_dropout,
                               relu_dropout = wargs.relu_dropout,
                               encoder_normalize_before=wargs.encoder_normalize_before)
+        '''
+        from models.self_att_model import SelfAttEncoder, SelfAttEncoderLayer, \
+                PositionwiseFeedForward, clones
+        from models.attention import MultiHeadedAttention
+        c = copy.deepcopy
+        attn = MultiHeadedAttention(h=wargs.n_head, d_model=wargs.d_model, dropout=wargs.att_dropout)
+        ff = PositionwiseFeedForward(d_model=wargs.d_model, d_ff=wargs.d_ff_filter,
+                                     dropout=wargs.relu_dropout)
+        return SelfAttEncoder(src_emb=src_emb,
+                              layer=SelfAttEncoderLayer(wargs.d_model, c(attn), c(ff),
+                                                        dropout=wargs.residual_dropout),
+                              N=wargs.n_enc_layers)
     elif wargs.encoder_type == 'cnn':
         return CNNEncoder(opt.enc_layers, opt.rnn_size,
                           opt.cnn_kernel_width,
@@ -96,6 +127,7 @@ def build_decoder(trg_emb):
                                  rnn_dropout_prob = wargs.rnn_dropout,
                                  out_dropout_prob = wargs.output_dropout)
     if wargs.decoder_type == 'att':
+        '''
         from models.self_att_decoder import SelfAttDecoder
         return SelfAttDecoder(trg_emb = trg_emb,
                               n_layers = wargs.n_dec_layers,
@@ -107,6 +139,19 @@ def build_decoder(trg_emb):
                               relu_dropout = wargs.relu_dropout,
                               proj_share_weight = wargs.proj_share_weight,
                               decoder_normalize_before = wargs.decoder_normalize_before)
+        '''
+        from models.self_att_model import SelfAttDecoder, SelfAttDecoderLayer, \
+                PositionwiseFeedForward, clones
+        from models.attention import MultiHeadedAttention
+        c = copy.deepcopy
+        attn = MultiHeadedAttention(h=wargs.n_head, d_model=wargs.d_model, dropout=wargs.att_dropout)
+        wlog('clones -> {}'.format(2))
+        ff = PositionwiseFeedForward(d_model=wargs.d_model, d_ff=wargs.d_ff_filter,
+                                     dropout=wargs.relu_dropout)
+        return SelfAttDecoder(trg_emb=trg_emb,
+                              layer=SelfAttDecoderLayer(wargs.d_model, c(attn), c(attn), c(ff),
+                                                        dropout=wargs.residual_dropout),
+                              N=wargs.n_enc_layers)
     elif wargs.encoder_type == 'tgru':
         from models.tgru_decoder import StackedTransDecoder
         return StackedTransDecoder(trg_emb = trg_emb,
@@ -121,9 +166,14 @@ def build_NMT(src_emb, trg_emb):
 
     encoder = build_encoder(src_emb)
     decoder = build_decoder(trg_emb)
+    
+    from models.self_att_model import Generator 
+    generator = Generator(wargs.d_model if wargs.decoder_type == 'att' else 2 * wargs.d_enc_hid, trg_emb)
+    if wargs.bow_loss is True:
+        from models.self_att_model import BowMapper
+        bowMapper = BowMapper(wargs.d_model if wargs.decoder_type == 'att' else 2 * wargs.d_enc_hid, trg_emb)
+    else: bowMapper = None
 
-    nmt = NMTModel(encoder, decoder)
-
-    return nmt
+    return NMTModel(encoder, decoder, generator, bowMapper)
 
 

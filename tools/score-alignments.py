@@ -2,9 +2,10 @@
 # -*- coding:utf-8 -*-
 from __future__ import division
 
-import optparse
+import io
 import sys
 import uniout
+import optparse
 
 optparser = optparse.OptionParser()
 optparser.add_option("-d", "--prefix", dest="prefix", default="data/hansards", help="Data filename prefix (default=data)")
@@ -37,7 +38,9 @@ def getAln(aln_str):
 ref_alns, tst_alns = [], []
 total_sure, total_actual, total_match_sure, total_match_possible = 0, 0, 0, 0
 
-for (sent_id, (s, t, g, h)) in enumerate(zip(open(src_data), open(trg_data), open(gold_aln), open(hypo_aln))):
+for (sent_id, (s, t, g, h)) in enumerate(zip(io.open(src_data, mode='r', encoding='utf-8'), \
+        io.open(trg_data, mode='r', encoding='utf-8'), io.open(gold_aln, mode='r', encoding='utf-8'), \
+        io.open(hypo_aln, mode='r', encoding='utf-8'))):
 
     _sure = set([tuple(map(int, x.split("/")[0].split(':') if x.rfind('/') > 0 \
                            else x.split(':') )) for x in filter(lambda x: x.find(":") > -1,

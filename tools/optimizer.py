@@ -10,7 +10,7 @@ from .utils import wlog
 
 class Optim(object):
 
-    def __init__(self, opt_mode, learning_rate, max_grad_norm):
+    def __init__(self, opt_mode, learning_rate, max_grad_norm, factor=2):
 
         self.opt_mode = opt_mode
         self.learning_rate = learning_rate
@@ -18,6 +18,7 @@ class Optim(object):
 
         self.n_current_steps = 0
         self.warmup_steps = wargs.warmup_steps
+        self.factor = factor
 
         if wargs.lr_update_way == 'invsqrt':
             self.warmup_end_lr = learning_rate
@@ -60,10 +61,10 @@ class Optim(object):
             #self.optimizer = opt.Adadelta(self.params, lr=self.learning_rate, rho=0.95, weight_decay=10e-5)
             wlog('Adadelta ... lr: {}, rho: {}'.format(self.learning_rate, wargs.rho))
         elif self.opt_mode == 'adam':
-            self.optimizer = opt.Adam(self.params, lr=self.learning_rate,
-                                      betas=[wargs.beta_1, wargs.beta_2], eps=wargs.adam_epsilon)
-            wlog('Adam ... lr: {}, [ beta_1: {}, beta_2: {} ], adam_epsilon: {}'.format(
-                self.learning_rate, wargs.beta_1, wargs.beta_2, wargs.adam_epsilon))
+            self.optimizer = opt.Adam(self.params, lr=self.learning_rate, betas=[wargs.beta_1, wargs.beta_2],
+                    eps=wargs.adam_epsilon, weight_decay=wargs.weight_decay)
+            wlog('Adam ... lr: {}, [ beta_1: {}, beta_2: {} ], adam_epsilon: {}, weight_decay: {}'.format(
+                self.learning_rate, wargs.beta_1, wargs.beta_2, wargs.adam_epsilon, wargs.weight_decay))
         else:
             wlog('Do not support this opt_mode {}'.format(self.opt_mode))
 
@@ -75,13 +76,13 @@ class Optim(object):
         # update the learning rate
         self.n_current_steps += 1
         if wargs.lr_update_way == 'noam':
-            factor = ( wargs.d_model ** (-0.5) ) * min(
-                (self.n_current_steps + 1) ** (-0.5),
-                (self.n_current_steps + 1) * ( self.warmup_steps ** (-1.5) )
+            self.learning_rate = self.factor * ( wargs.d_model ** (-0.5) * min(
+                self.n_current_steps ** (-0.5),
+                self.n_current_steps * ( self.warmup_steps ** (-1.5) ) )
             )
             #self.learning_rate = factor
             #wlog('lrate = {}'.format(factor))
-            self.learning_rate = wargs.learning_rate * factor
+            #self.learning_rate = wargs.learning_rate * factor
         elif wargs.lr_update_way == 'chen':
             n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
             factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),

@@ -1,5 +1,6 @@
 from __future__ import division
 
+import io
 import sys
 import math
 import numpy
@@ -24,9 +25,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    hypo_b = open(args.b, 'r').read().strip()
-    hypo_m = open(args.m, 'r').read().strip()
-    refs = [open(ref_fpath, 'r').read().strip() for ref_fpath in args.r]
+    hypo_b = io.open(args.b, mode='r', encoding='utf-8').read().strip()
+    hypo_m = io.open(args.m, mode='r', encoding='utf-8').read().strip()
+    refs = [io.open(ref_fpath, mode='r', encoding='utf-8').read().strip() for ref_fpath in args.r]
 
     cased = ( not args.lc )
     bleu_b = bleu(hypo_b, refs, 4, cased=cased)

@@ -1,4 +1,5 @@
 # -*- coding:utf-8 -*-
+import io
 import torch as tc
 from .utils import *
 
@@ -88,10 +89,13 @@ class Vocab(object):
 
         if self.real:
             txt_vocab_file = filename + '.txt'
-            file = open(txt_vocab_file, 'w')
-            file.write(content)
+            #file = open(txt_vocab_file, 'wb')
+            #file.write(content.encode('utf-8'))
+            with io.open(txt_vocab_file, mode='w', encoding='utf-8') as file:
+            #file = open(txt_vocab_file, 'w')
+                file.write(content)
 
-        file.close()
+            file.close()
 
     def keys2idx(self, list_words, unk_word, bos_word=None, eos_word=None):
 

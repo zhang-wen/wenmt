@@ -3,6 +3,7 @@ from __future__ import division
 
 import os
 import re
+import io
 import sys
 import time
 import numpy
@@ -13,7 +14,7 @@ import wargs
 from tools.utils import *
 from tools.mteval_bleu import mteval_bleu_file
 from tools.multi_bleu import multi_bleu_file
-numpy.set_printoptions(threshold=numpy.nan)
+numpy.set_printoptions(sys.maxsize)
 
 if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
 elif wargs.decoder_type == 'att': from searchs.nbs_t2t import *
@@ -22,7 +23,7 @@ if wargs.search_mode == 2: from searchs.cp import *
 class Translator(object):
 
     def __init__(self, model, svcb_i2w=None, tvcb_i2w=None, search_mode=None, thresh=None, lm=None,
-                 ngram=None, ptv=None, k=None, noise=None, print_att=False):
+                 ngram=None, ptv=None, k=None, noise=None, print_att=False, gpu_ids=None):
 
         self.svcb_i2w = svcb_i2w
         self.tvcb_i2w = tvcb_i2w
@@ -33,36 +34,37 @@ class Translator(object):
         self.ngram = ngram
         self.thresh = thresh
         self.print_att = print_att
+        self.gpu_ids = gpu_ids
         self.k = k if k else wargs.beam_size
         self.search_mode = search_mode if search_mode else wargs.search_mode
+        self.valid_k = 1
+        self.valid_searcher = Nbs(model, self.tvcb_i2w, k=self.valid_k, noise=self.noise, print_att=print_att, gpu_ids=gpu_ids)
+        self.test_in_training = wargs.test_in_training
+        self.test_searcher = Nbs(model, self.tvcb_i2w, k=self.k, print_att=self.print_att, gpu_ids=gpu_ids)
 
-        if self.search_mode == 0: self.greedy = Greedy(self.tvcb_i2w)
-        elif self.search_mode == 1: self.nbs = Nbs(model, self.tvcb_i2w, k=self.k,
-                                                   noise=self.noise, print_att=print_att)
-        elif self.search_mode == 2: self.wcp = Wcp(model, self.tvcb_i2w, k=self.k,
-                                                   print_att=print_att)
+    def trans_onesent(self, xs, xs_mask=None):
+        with tc.no_grad():
+            batch_tran_cands = self.test_searcher.beam_search_trans(xs, xs_mask)
+        #trans, loss, _, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
+        one = list(zip(*list(zip(*batch_tran_cands))[:][0]))    # [([2, 3, 4],), (2.3,)] for one setences
+        one = one[0][0] # one[0] -> ([2, 3, 4],)
+        true_trans, trans = idx2sent(one, self.tvcb_i2w)
+        # attent_matrix: (trgL, srcL) numpy
+        attent_matrix = None
+        return trans, one, true_trans, one[1:-1], attent_matrix
 
-    def trans_onesent(self, s):
-
-        trans_start = time.time()
+    def trans_batch(self, xs, xs_mask=None, valid=False):
 
         with tc.no_grad():
-            if self.search_mode == 0: trans = self.greedy.greedy_trans(s)
-            elif self.search_mode == 1: batch_tran_cands = self.nbs.beam_search_trans(s)
-            #elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
-            elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
-
-        trans, loss, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
-        trans, ids, true_trans, true_idx, attent_matrix = filter_reidx(trans, self.tvcb_i2w, attent_matrix)
-
-        #spend = time.time() - trans_start
-        #wlog('Word-Level spend: {} / {} = {}'.format(
-        #    format_time(spend), len(ids), format_time(spend / len(ids))))
-
-        # attent_matrix: (trgL, srcL) numpy
-        return trans, ids, true_trans, true_idx, attent_matrix
+            if valid is True:
+                return self.valid_searcher.beam_search_trans(xs, xs_mask)
+            else:
+                return self.test_searcher.beam_search_trans(xs, xs_mask)
+                #return self.valid_searcher.beam_search_trans(xs, xs_mask)
 
     def trans_samples(self, xs_nL, ys_nL):
+
+        self.model.eval()
 
         # xs_nL: (sample_size, max_sLen)
         for idx in range(len(xs_nL)):
@@ -129,6 +131,93 @@ class Translator(object):
         assert len(attent_matrixs) == len(trg_toks)
         return attent_matrixs, trg_toks
 
+    def batch_trans_file(self, xs_inputs, batch_tst_data=None, valid=False):
+        n_batches = len(xs_inputs)   # number of batchs, here is sentences number
+        _SN = xs_inputs.n_sent
+        wlog('\t Contain {} sents, {} batches'.format(_SN, n_batches))
+        #point_every, number_every = int(math.ceil(n_batches/100)), int(math.ceil(n_batches/10))
+        #point_every, number_every = int(math.ceil(_SN/100.)), int(math.ceil(_SN/10.))
+        total_trans, total_losses, SN, WN = [], [], 0, 0
+        total_aligns = [] if self.print_att is True else None
+        fd_attent_matrixs, trgs = None, None
+        if batch_tst_data != None:
+            wlog('\nStarting force decoding ...')
+            fd_attent_matrixs, trgs = self.force_decoding(batch_tst_data)
+            wlog('Finish force decoding ...')
+
+        trans_start = time.time()
+        for bidx in range(n_batches):
+            # (idxs, tsrcs, lengths, src_mask) for test
+            # (idxs, tsrcs, ttrgs_for_files, ttrg_bows_for_files, lengths, src_mask,
+            # trg_mask_for_files, ttrg_bows_mask_for_files ) for valid and train
+            batch = xs_inputs[bidx]
+            xs_nL = batch[1]
+            xs_mask = batch[5] if len(batch) == 8 else batch[3]
+            if fd_attent_matrixs == None:   # need translate
+                batch_tran_cands = self.trans_batch(xs_nL, xs_mask=xs_mask, valid=valid)
+            else:
+                # attention: feed previous word -> get the alignment of next word !!!
+                attent_matrix = fd_attent_matrixs[bidx] # do not remove <b>
+                #print attent_matrix
+                trg_toks = sent_filter(trgs[bidx]) # remove <b> and <e>
+                trg_toks = [self.tvcb_i2w[wid] for wid in trg_toks]
+                trans = trg_toks
+                WN += len(trg_toks)
+
+            # get alignment from attent_matrix for one translation
+            if False and attent_matrix != None:
+                # maybe generate null translation, fault-tolerant here
+                if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
+                else:
+                    src_toks = [self.svcb_i2w[wid] for wid in x_filter]
+                    # attent_matrix: (trgL, srcL) numpy
+                    alnStr = print_attention_text(attent_matrix, src_toks, trg_toks)
+                total_aligns.append(alnStr)
+
+            ''' batch_tran_cands ->
+            [
+                [
+                    ([2, 3, 4], 8.789353370666504, 8.012884140014648, None),
+                    ([2, 33, 4], 9.789353370666504, 9.01288414, None)
+                ],   cands for one translation
+                [
+                    ([4, 5, 6], 3.789353370666504, 5.012884140014648, None),
+                    ([2, 5, 6], 5.789353370666504, 4.012884140014648, None)
+                ]
+            ]
+            '''
+            top = list(zip(*list(zip(*batch_tran_cands))[:][0]))
+            #[[([2, 3], 8.789353370666504, 8.012884140014648, None)]]
+            total_trans += list(top[0]) # [[2, 3, 4], [4, 5, 6]] for 2 sentences
+            total_losses += list(top[1])   # original loss [2.3, 3.4] for 2 sentences
+            #total_losses += list(top[2])    # norm loss
+            SN += xs_nL.size(0)
+            WN += sum([len(one_sent) for one_sent in list(top[0])])
+            wlog('{}-'.format(bidx), newline=0)
+            sys.stderr.flush()
+
+        wlog('\nNumber of sentences: {}'.format(SN))
+        assert _SN == SN, 'sent number dismatch'
+        spend = time.time() - trans_start
+        if WN == 0: wlog('What ? No words generated when translating one file !!!')
+        else:
+            wlog('Word-Level: [{}/{} = {}/word], [{}/{:7.2f}s = {:7.2f} words/s]'.format(
+                format_time(spend), WN, format_time(spend/WN), WN, spend, WN/spend))
+            wlog('Sent-Level: [{}/{} = {}/sent], [{}/{:7.2f}s = {:7.2f} sents/s]'.format(
+                format_time(spend), SN, format_time(spend/SN), SN, spend, SN/spend))
+
+        wlog('Done ...')
+        if total_aligns != None: total_aligns = '\n'.join(total_aligns) + '\n'
+        result = '\n'.join([idx2sent(one, self.tvcb_i2w)[-1] for one in total_trans])
+        total_losses = sum(total_losses)
+        return {
+                'translation': result + '\n',
+                'total_loss': total_losses,
+                'word_level_loss': total_losses / WN,
+                'sent_level_loss': total_losses / SN,
+                'total_aligns': total_aligns
+                }
+
     def single_trans_file(self, xs_inputs, src_labels_fname=None, batch_tst_data=None):
 
         n_batches = len(xs_inputs)   # number of batchs, here is sentences number
@@ -138,7 +227,7 @@ class Translator(object):
         sent_no, words_cnt = 0, 0
 
         fd_attent_matrixs, trgs = None, None
-        if batch_tst_data is not None:
+        if batch_tst_data != None:
             wlog('\nStarting force decoding ...')
             fd_attent_matrixs, trgs = self.force_decoding(batch_tst_data)
             wlog('Finish force decoding ...')
@@ -150,8 +239,8 @@ class Translator(object):
             # idxs, tsrcs, ttrgs_for_files, lengths, src_mask, trg_mask_for_files
             for no in range(xs_nL.size(0)): # batch size, 1 for valid
                 x_filter = sent_filter(xs_nL[no].tolist())
-                if src_labels_fname is not None:
-                    assert self.print_att is None, 'split sentence does not suport print attention'
+                if src_labels_fname != None:
+                    assert self.print_att == None, 'split sentence does not suport print attention'
                     # split by segment labels file
                     segs = self.segment_src(x_filter, labels[bidx].strip().split(' '))
                     trans = []
@@ -162,7 +251,7 @@ class Translator(object):
                     # merge by order
                     trans = ' '.join(trans)
                 else:
-                    if fd_attent_matrixs is None:   # need translate
+                    if fd_attent_matrixs == None:   # need translate
                         trans, ids, _, _, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
                         trg_toks = [] if trans == '' else trans.split(' ')
                         if trans == '': wlog('What ? null translation ... !')
@@ -177,7 +266,7 @@ class Translator(object):
                         words_cnt += len(trg_toks)
 
                     # get alignment from attent_matrix for one translation
-                    if attent_matrix is not None:
+                    if attent_matrix != None:
                         # maybe generate null translation, fault-tolerant here
                         if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
                         else:
@@ -200,7 +289,7 @@ class Translator(object):
                     sys.stderr.flush()
                 if ( sent_no % number_every ) == 0: wlog(sent_no, newline=0)
 
-        wlog(sent_no)
+        wlog('Sentences number: {}'.format(sent_no))
 
         if self.search_mode == 1:
             C = self.nbs.C
@@ -223,7 +312,7 @@ class Translator(object):
                 words_cnt, spend, words_cnt/spend))
 
         wlog('Done ...')
-        if total_aligns is not None: total_aligns = '\n'.join(total_aligns) + '\n'
+        if total_aligns != None: total_aligns = '\n'.join(total_aligns) + '\n'
         return '\n'.join(total_trans) + '\n', total_aligns
 
     def segment_src(self, src_list, labels_list):
@@ -248,14 +337,14 @@ class Translator(object):
 
         return segments
 
-    def write_file_eval(self, out_fname, trans, data_prefix, alns=None):
+    def write_file_eval(self, out_fname, trans, data_prefix, alns=None, test=False):
 
-        if alns is not None:
-            fout_aln = open('{}.aln'.format(out_fname), 'w')    # valids/trans
+        if alns != None:
+            fout_aln = io.open('{}.aln'.format(out_fname), mode='w', encoding='utf-8')    # valids/trans
             fout_aln.writelines(alns)
             fout_aln.close()
 
-        fout = open(out_fname, 'w')    # valids/trans
+        fout = io.open(out_fname, mode='w', encoding='utf-8')    # valids/trans
         fout.writelines(trans)
         fout.close()
 
@@ -285,11 +374,11 @@ class Translator(object):
             wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
             wlog('done')
-            mteval_bleu_opost = mteval_bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
+            mteval_bleu_opost = mteval_bleu_file(opost_name, ref_fpaths, cased=wargs.cased, ref_bpe=wargs.ref_bpe)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
-        mteval_bleu = mteval_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
-        multi_bleu = multi_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
+        mteval_bleu = mteval_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu, ref_bpe=wargs.ref_bpe)
+        multi_bleu = multi_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu, ref_bpe=wargs.ref_bpe)
         #mteval_bleu = mteval_bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, '{}{}_{}_{}.txt'.format(
             out_fname, '_char' if wargs.char_bleu is True else '', mteval_bleu, multi_bleu))
@@ -298,68 +387,81 @@ class Translator(object):
 
         return final_bleu
 
-    def trans_tests(self, tests_data, eid, bid):
+    def trans_tests(self, tests_data, e_idx, e_bidx, n_steps):
 
         for _, test_prefix in zip(tests_data, wargs.tests_prefix):
 
             wlog('\nTranslating test dataset {}'.format(test_prefix))
             label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                                  test_prefix) if wargs.segments else None
-            trans, alns = self.single_trans_file(tests_data[test_prefix], label_fname)
-
+            rst = self.batch_trans_file(tests_data[test_prefix], label_fname)
+            trans, tloss, wloss, sloss, alns = rst['translation'], rst['total_loss'], \
+                    rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
             outprefix = wargs.dir_tests + '/' + test_prefix + '/trans'
-            test_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
-                outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
+            test_out = "{}_e{}_b{}_upd{}_k{}".format(outprefix, e_idx, e_bidx, n_steps, self.k) 
+            _ = self.write_file_eval(test_out, trans, test_prefix, alns, test=True)
 
-            _ = self.write_file_eval(test_out, trans, test_prefix, alns)
-
-    def trans_eval(self, valid_data, eid, bid, model_file, tests_data):
+    def trans_eval(self, valid_data, e_idx, e_bidx, n_steps, model_file, tests_data):
+        self.model.eval()
 
         wlog('\nTranslating validation dataset {}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix))
         label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                              wargs.val_prefix) if wargs.segments else None
-        trans, alns = self.single_trans_file(valid_data, label_fname)
+        #trans, alns = self.single_trans_file(valid_data, label_fname)
+        rst = self.batch_trans_file(valid_data, label_fname, valid=True)
+        trans, tloss, wloss, sloss, alns = rst['translation'], rst['total_loss'], \
+                rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
 
         outprefix = wargs.dir_valid + '/trans'
-        valid_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
-            outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
+        valid_out = "{}_e{}_b{}_upd{}_k{}".format(outprefix, e_idx, e_bidx, n_steps, self.valid_k) 
 
-        bleu_score = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns)
+        bleu = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns)
 
-        bleu_scores_fname = '{}/train_bleu.log'.format(wargs.dir_valid)
-        bleu_scores = [0.]
-        if os.path.exists(bleu_scores_fname):
-            with open(bleu_scores_fname) as f:
+        scores_fname = '{}/train.log'.format(wargs.dir_valid)
+        bleus, losses = [0.], [9999999.]
+        if os.path.exists(scores_fname):
+            with io.open(scores_fname, mode='r', encoding='utf-8') as f:
                 for line in f:
-                    s_bleu = line.split(':')[-1].strip()
-                    bleu_scores.append(float(s_bleu))
+                    line = line.strip()
+                    if line == '': continue
+                    items = line.split('-')
+                    _loss, _bleu = items[-4].strip(), items[-1].strip()
+                    _loss, _bleu = _loss.split(':')[-1], _bleu.split(':')[-1]
+                    bleus.append((float(_bleu)))
+                    losses.append(float(_loss))
 
-        wlog('\nCurrent [{}] - Best History [{}]'.format(bleu_score, max(bleu_scores)))
-        if bleu_score > max(bleu_scores):   # better than history
+        #better = wloss < min(losses) if wargs.select_model_by == 'loss' else bleu > max(bleus)
+        better = ( wloss < min(losses) ) or ( bleu > max(bleus) )
+        wlog('\nCurrent BLEU [{}] - Best History [{}]'.format(bleu, max(bleus)))
+        wlog('Current LOSS [{}] - Best History [{}]'.format(wloss, min(losses)))
+        if better:   # better than history
             wargs.worse_counter = 0
             copyfile(model_file, wargs.best_model)
             wlog('Better, cp {} {}'.format(model_file, wargs.best_model))
-            bleu_content = 'epoch [{}], batch[{}], BLEU score*: {}'.format(eid, bid, bleu_score)
-            if tests_data is not None: self.trans_tests(tests_data, eid, bid)
+            bleu_content = '*epoch:{}-batch:{}-step:{}-wloss:{}-sloss:{}-tloss:{}-bleu:{}'.format(
+                    e_idx, e_bidx, n_steps, wloss, sloss, tloss, bleu)
+            if tests_data != None and self.test_in_training is True:
+                self.trans_tests(tests_data, e_idx, e_bidx, n_steps)
         else:
             wlog('Worse')
+            bleu_content = 'epoch:{}-batch:{}-step:{}-wloss:{}-sloss:{}-tloss:{}-bleu:{}'.format(
+                    e_idx, e_bidx, n_steps, wloss, sloss, tloss, bleu)
             wargs.worse_counter = wargs.worse_counter + 1
-            if wargs.worse_counter >= 8.:
+            if wargs.worse_counter >= 10.:
                 wlog('{} consecutive worses, finish training.'.format(wargs.worse_counter))
                 sys.exit(0)
-            bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, bleu_score)
 
-        append_file(bleu_scores_fname, bleu_content)
+        append_file(scores_fname, bleu_content)
 
         sfig = '{}.{}'.format(outprefix, 'sfig')
-        sfig_content = ('{} {} {} {} {}').format(eid, bid, self.search_mode, self.k, bleu_score)
+        sfig_content = ('{} {} {} {} {} {}').format(e_idx, e_bidx, n_steps, self.k, tloss, bleu)
         append_file(sfig, sfig_content)
 
         if wargs.save_one_model and os.path.exists(model_file) is True:
             os.remove(model_file)
             wlog('Saving one model, so delete {}\n'.format(model_file))
 
-        return bleu_score
+        return bleu
 
 if __name__ == "__main__":
     import sys

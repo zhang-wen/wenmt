@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import sys
 import numpy as np
 import torch as tc
 import torch.nn as nn
@@ -8,7 +9,7 @@ from tools.utils import MAX_SEQ_SIZE, wlog, PAD
 from .nn_utils import PositionwiseFeedForward
 from .attention import MultiHeadAttention
 #from .attention import MultiheadAttention
-np.set_printoptions(threshold=np.nan)
+np.set_printoptions(threshold=sys.maxsize)
 
 '''
 Get an attention mask to avoid using the subsequent info.

@@ -3,10 +3,11 @@ from __future__ import division
 import os
 import math
 import re
+import io
 import sys
 import numpy
 import string
-from zhon import hanzi
+#from zhon import hanzi
 
 def wlog(obj, newline=1):
 
@@ -60,7 +61,7 @@ def grab_all_trg_files(filename):
     return file_names
 
 def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=False,
-                min_len=0, max_len=80, len_interval=10):
+                ref_bpe=False, min_len=0, max_len=80, len_interval=10):
 
     wlog('############ Go into mteval-v11b calculation grouped by length ############')
     wlog('Calculating case-{}sensitive {}-gram BLEU ...'.format('' if cased else 'in', ngram))
@@ -70,19 +71,19 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=F
     for ref_fpath in ref_fpaths: wlog('\t\t{}'.format(ref_fpath))
 
     # split by source length
-    src_F = open(src_fpath, 'r')
+    src_F = io.open(src_fpath, mode='r', encoding='utf-8')
     src_lines = src_F.readlines()
     src_F.close()
     src_lines = [line.strip() for line in src_lines]
 
-    hyp_F = open(trans_fpath, 'r')
+    hyp_F = io.open(trans_fpath, mode='r', encoding='utf-8')
     hyp_lines = hyp_F.readlines()
     hyp_F.close()
     hyp_lines = [line.strip() for line in hyp_lines]
 
     refs_lines = []
     for ref_fpath in ref_fpaths:
-        ref_F = open(ref_fpath, 'r')
+        ref_F = io.open(ref_fpath, mode='r', encoding='utf-8')
         ref_lines = ref_F.readlines()
         ref_F.close()
         ref_lines = [line.strip() for line in ref_lines]
@@ -119,7 +120,7 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=F
     for interval_idx in range(num_intervals):
         cand_lines = inter_hyps[interval_idx]
         refs_lines = [inter_refs[interval_idx][ref_idx] for ref_idx in range(ref_cnt)]
-        result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char)
+        result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char, ref_bpe=ref_bpe)
         result = float('%.2f' % (result * 100))
         bleus[interval_idx] = result
 
@@ -129,8 +130,9 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=F
 '''
 convert some code of Moses mteval-v11b.pl into python code
 '''
-def token(s, cased=False):
+def token(s, cased=False, bpe=False):
 
+    if bpe is True: s = re.sub('(@@ )|(@@ ?$)', '', s)
     # language-independent part:
     s, n = re.subn('<skipped>', '', s)    # strip "skipped" tags
     s, n = re.subn('-\n', '', s)  # strip end-of-line hyphenation and join lines
@@ -197,7 +199,7 @@ def sentence2dict(sentence, n):
                 result[gram] = 1
     return result
 
-def mt_eval_bleu(cand_lines, refs_lines, n=4, logfun=wlog, cased=False, char=False):
+def mt_eval_bleu(cand_lines, refs_lines, n=4, logfun=wlog, cased=False, char=False, ref_bpe=False):
     '''
         Calculate BLEU score given translation and references.
 
@@ -224,7 +226,7 @@ def mt_eval_bleu(cand_lines, refs_lines, n=4, logfun=wlog, cased=False, char=Fal
         h_length = len(cand_line.split(' '))
 
         if char is True: refs = [' '.join(zh_to_chars(ref_lines[sidx].decode('utf-8'))) for ref_lines in refs_lines]
-        else: refs = [token(ref_lines[sidx], cased) for ref_lines in refs_lines]
+        else: refs = [token(ref_lines[sidx], cased, bpe=ref_bpe) for ref_lines in refs_lines]
 
         # this is same with mteval-v11b.pl, using the length of the shortest reference
         ref_lengths = sorted([len(ref.split(' ')) for ref in refs])
@@ -294,7 +296,7 @@ def mt_eval_bleu(cand_lines, refs_lines, n=4, logfun=wlog, cased=False, char=Fal
 
     return BLEU
 
-def mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=False, char=False):
+def mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=False, char=False, ref_bpe=False):
 
     '''
         Calculate the BLEU score given translation files and reference files.
@@ -306,17 +308,17 @@ def mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=False, char=False):
     '''
 
     wlog('\n' + '#' * 30 + ' mteval-v11b ' + '#' * 30)
-    wlog('Calculating case-{}sensitive {}-gram BLEU ...'.format('' if cased else 'in', ngram))
+    wlog('Calculating case-{}sensitive {}-gram BLEU, remove refbpe: {} ...'.format('' if cased else 'in', ngram, ref_bpe))
     wlog('\tcandidate file: {}'.format(cand_file))
     wlog('\treferences file:')
     for ref_fpath in ref_fpaths: wlog('\t\t{}'.format(ref_fpath))
 
-    cand_f = open(cand_file, 'r')
-    refs_f = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
+    cand_f = io.open(cand_file, mode='r', encoding='utf-8')
+    refs_f = [io.open(ref_fpath, mode='r', encoding='utf-8') for ref_fpath in ref_fpaths]
 
     cand_lines = cand_f.readlines()
     refs_lines = [ref_f.readlines() for ref_f in refs_f]
-    result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char)
+    result = mt_eval_bleu(cand_lines, refs_lines, ngram, cased=cased, char=char, ref_bpe=ref_bpe)
     result = float('%.2f' % (result * 100))
 
     cand_f.close()
@@ -353,6 +355,7 @@ if __name__ == "__main__":
     parser.add_argument('-lc', help='Lowercase', action='store_true')
     parser.add_argument('-c', '--candidate', dest='c', required=True, help='translation file')
     parser.add_argument('-r', '--references', dest='r', required=True, help='reference_[0, 1, ...]')
+    parser.add_argument('-refbpe', '--ref-bpe', dest='refbpe', action='store_true')
     args = parser.parse_args()
 
     '''
@@ -375,7 +378,7 @@ if __name__ == "__main__":
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
+    mteval_bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased, ref_bpe=args.refbpe)
 
     src_fpath = './nist03.src.plain.u8.a2b.stanseg'
     #src_fpath = './src.3'

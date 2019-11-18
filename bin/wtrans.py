@@ -2,6 +2,7 @@
 from __future__ import division
 
 import os
+import io
 import sys
 import time
 import argparse
@@ -17,7 +18,6 @@ from tools.inputs import Input
 from translate import Translator
 from tools.utils import load_model, wlog, dec_conf, init_dir, append_file
 from tools.inputs_handler import extract_vocab, wrap_tst_data
-from models.losser import Classifier
 
 if __name__ == '__main__':
 
@@ -25,6 +25,8 @@ if __name__ == '__main__':
     A.add_argument('-m', '--model-file', required=True, dest='model_file', help='model file')
     A.add_argument('-i', '--input-file', dest='input_file', default=None,
                    help='name of file to be translated')
+    A.add_argument('-g', '--gpu-ids', type=int, dest='gpu_ids', nargs='+', default=[0],
+                   help='which gpu device to decode on')
 
     '''
     A.add_argument('--search-mode', dest='search_mode', default=2,
@@ -80,21 +82,18 @@ if __name__ == '__main__':
     n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
 
-    _dict = load_model(model_file)
-    if len(_dict) == 4: model_dict, eid, bid, optim = _dict
-    elif len(_dict) == 5: model_dict, class_dict, eid, bid, optim = _dict
+    model_dict, e_idx, e_bidx, n_steps, optim = load_model(model_file)
     from models.embedding import WordEmbedding
-    src_emb = WordEmbedding(n_src_vcb, wargs.d_src_emb, wargs.position_encoding, prefix='Src')
-    trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb, wargs.position_encoding, prefix='Trg')
+    src_emb = WordEmbedding(n_src_vcb, wargs.d_src_emb,
+                            position_encoding=wargs.position_encoding, prefix='Src')
+    trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb,
+                            position_encoding=wargs.position_encoding, prefix='Trg')
     from models.model_builder import build_NMT
     nmtModel = build_NMT(src_emb, trg_emb)
-    classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb, loss_norm=wargs.loss_norm,
-                            label_smoothing=wargs.label_smoothing, emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
-    nmtModel.decoder.classifier = classifier
 
-    if wargs.gpu_id is not None:
-        wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
-        nmtModel.to(tc.device('cuda'))
+    if args.gpu_ids is not None:
+        wlog('push model onto GPU {} ... '.format(args.gpu_ids[0]), 0)
+        nmtModel.to(tc.device(type='cuda', index=args.gpu_ids[0]))
     else:
         wlog('push model onto CPU ... ', 0)
         nmtModel.to(tc.device('cpu'))
@@ -105,7 +104,8 @@ if __name__ == '__main__':
     dec_conf()
 
     nmtModel.eval()
-    tor = Translator(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, print_att=wargs.print_att)
+    tor = Translator(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, print_att=wargs.print_att,
+                     gpu_ids=args.gpu_ids)
 
     if not args.input_file:
         wlog('Translating one sentence ... ')
@@ -151,24 +151,26 @@ if __name__ == '__main__':
     wlog('Translating test file {} ... '.format(input_abspath))
     ref_file = '{}{}.{}'.format(wargs.val_tst_dir, args.input_file, wargs.val_ref_suffix)
     test_src_tlst, _ = wrap_tst_data(input_abspath, src_vocab, char=wargs.src_char)
-    test_input_data = Input(test_src_tlst, None, 1, batch_sort=False)
+    test_input_data = Input(test_src_tlst, None, batch_size=wargs.test_batch_size, batch_sort=False,
+                           gpu_ids=args.gpu_ids)
 
     batch_tst_data = None
-    if os.path.exists(ref_file):
+    if os.path.exists(ref_file) and False:
         wlog('With force decoding test file {} ... to get alignments'.format(input_file))
         wlog('\t\tRef file {}'.format(ref_file))
         from tools.inputs_handler import wrap_data
         tst_src_tlst, tst_trg_tlst = wrap_data(wargs.val_tst_dir, args.input_file,
                                                wargs.val_src_suffix, wargs.val_ref_suffix,
                                                src_vocab, trg_vocab, False, False, 1000000)
-        batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, 1, batch_sort=False)
+        batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, batch_size=wargs.test_batch_size, batch_sort=False)
 
-    trans, alns = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
-
+    rst = tor.batch_trans_file(test_input_data, batch_tst_data=batch_tst_data)
+    trans, tloss, wloss, sloss, alns = rst['translation'], rst['total_loss'], \
+            rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
     if wargs.search_mode == 0: p1 = 'greedy'
     elif wargs.search_mode == 1: p1 = 'nbs'
     elif wargs.search_mode == 2: p1 = 'cp'
-    p2 = 'gpu' if wargs.gpu_id else 'cpu'
+    p2 = 'gpu' if args.gpu_ids is not None else 'cpu'
     p3 = 'wb' if wargs.with_batch else 'wob'
 
     outdir = 'wout_{}_{}_{}'.format(p1, p2, p3)
@@ -176,12 +178,12 @@ if __name__ == '__main__':
     init_dir(outdir)
     outprefix = '{}/{}'.format(outdir, args.input_file)
     # wout_nbs_gpu_wb_wvalid/nist06_
-    file_out = '{}_e{}_b{}_beam{}'.format(outprefix, eid, bid, wargs.beam_size)
+    file_out = "{}_e{}_b{}_upd{}_k{}".format(outprefix, e_idx, e_bidx, n_steps, wargs.beam_size) 
 
     mteval_bleu = tor.write_file_eval(file_out, trans, args.input_file, alns)
     bleus_record_fname = '{}/record_bleu.log'.format(outdir)
-    bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, mteval_bleu)
-    with open(bleus_record_fname, 'a') as f:
+    bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(e_idx, e_bidx, mteval_bleu)
+    with io.open(bleus_record_fname, mode='a', encoding='utf-8') as f:
         f.write(bleu_content + '\n')
         f.close()
 
@@ -189,8 +191,8 @@ if __name__ == '__main__':
     sfig_content = ('{} {} {} {} {}').format(
         #alpha,
         #beta,
-        eid,
-        bid,
+        e_idx,
+        e_bidx,
         wargs.search_mode,
         wargs.beam_size,
         #kl,

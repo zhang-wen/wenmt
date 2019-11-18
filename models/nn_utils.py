@@ -2,6 +2,7 @@ import math
 import torch as tc
 import torch.nn as nn
 import torch.nn.functional as F
+from tools.utils import wlog
 
 epsilon = 1e-20
 
@@ -24,10 +25,9 @@ class MaskSoftmax(nn.Module):
 
 class MyLogSoftmax(nn.Module):
 
-    def __init__(self, self_norm_alpha=None):
+    def __init__(self):
 
         super(MyLogSoftmax, self).__init__()
-        self.sna = self_norm_alpha
 
     def forward(self, x, dim=-1):
 
@@ -38,9 +38,6 @@ class MyLogSoftmax(nn.Module):
         log_norm = tc.log( x_exp_sum ) + x_max
         x = x - log_norm    # get log softmax
         prob = x_exp / x_exp_sum
-
-        # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
-        if self.sna is not None: x = x - self.sna * tc.pow(log_norm, 2)
 
         return log_norm, prob, x
 
@@ -89,6 +86,8 @@ class PositionwiseFeedForward(nn.Module):
 def Linear(in_features, out_features, bias=True):
     m = nn.Linear(in_features, out_features, bias)
     nn.init.xavier_uniform_(m.weight)
+    wlog('*Xavier init linear weight {}'.format(m.weight.size()))
     if bias is True:
         nn.init.constant_(m.bias, 0.)
+        wlog('*Zeros init linear bias {}'.format(m.bias.size()))
     return m

@@ -8,13 +8,14 @@ from .utils import *
 class Input(object):
 
     def __init__(self, x_list, y_list, batch_size, batch_type='sents', bow=False,
-                 batch_sort=False, prefix=None):
+                 batch_sort=False, gpu_ids=None, prefix=None):
 
         self.bow = bow
         self.x_list = x_list
         self.n_sent = len(x_list)
         self.batch_size = batch_size
         self.batch_sort = batch_sort
+        self.gpu_ids = gpu_ids
 
         if y_list is not None:
             self.y_list_files = y_list
@@ -40,11 +41,11 @@ class Input(object):
 
     def eos(self):
         end = ( self._read_pointer >= self.n_sent )
-        #print '-----------', self._read_pointer, self.n_sent, end
+        #print('pointer:{}, n_sent:{}, end:{}, n_batches:{}'.format(self._read_pointer, self.n_sent, end, self.n_batches))
         if end is True:
             self._read_pointer = 0
             if self.batch_type == 'token':
-                self.n_batches = self._batch_pointer
+                self.n_batches = self._batch_pointer + 1
                 self._batch_pointer = 0
         return end
 
@@ -70,7 +71,7 @@ class Input(object):
             if self.y_list_files is not None:
                 y = self.y_list_files[self._read_pointer]
                 y_batch_buffer.append(y)
-            #print max_len, n_samples, max_len * n_samples, batch_size, x
+            #print('{}, {}, {}, {}, {}'.format(max_len, n_samples, max_len * n_samples, batch_size, x))
             #print y
             #print '=================='
             max_len = max(max_len, len(x[0]))
@@ -160,7 +161,7 @@ class Input(object):
             if x is None: return x
             # (batch_size, max_len)
             if isinstance(x, tuple) or isinstance(x, list): x = tc.tensor(x).long()
-            if wargs.gpu_id is not None: x = x.cuda()    # push into GPU
+            if self.gpu_ids is not None: x = x.to(device=tc.device('cuda', index=self.gpu_ids[0]))    # push into GPU
             return x
 
         tsrcs = tuple2Tenser(srcs)
@@ -197,9 +198,11 @@ class Input(object):
 
     def shuffle(self):
 
+        wlog(len(self.x_list))
         wlog('shuffling the whole training data bilingually ... ', False)
         rand_idxs = tc.randperm(self.n_sent).tolist()
         self.x_list = [self.x_list[k] for k in rand_idxs]
+        wlog(len(self.x_list))
         self.y_list_files = [self.y_list_files[k] for k in rand_idxs]
         #data = list(zip(self.x_list, self.y_list_files))
         #x_tuple, y_tuple = zip(*[data[i] for i in tc.randperm(len(data))])
@@ -207,8 +210,9 @@ class Input(object):
         wlog('done.')
 
         slens = [len(self.x_list[k]) for k in range(self.n_sent)]
-        self.x_list, self.y_list_files = sort_batches(self.x_list, self.y_list_files,
-                                                      slens, wargs.batch_size,
-                                                      wargs.sort_k_batches)
+        #self.x_list, self.y_list_files = sort_batches(self.x_list, self.y_list_files,
+        #                                              slens, wargs.batch_size,
+        #                                              wargs.sort_k_batches)
+        wlog(len(self.x_list))
 
 

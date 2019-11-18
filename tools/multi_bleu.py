@@ -2,6 +2,8 @@
 from __future__ import division, print_function
 
 import os
+import re
+import io
 import sys
 import argparse
 from math import exp, log
@@ -121,7 +123,7 @@ def tokenize_lower(txt, char=False):
     else: txt = txt.split()
     return txt
 
-def multi_bleu(cand_lines, refs_lines, tokenize_fn=tokenize, ngram=4, char=False):
+def multi_bleu(cand_lines, refs_lines, tokenize_fn=tokenize, ngram=4, char=False, ref_bpe=False):
     correct = [0] * ngram
     total = [0] * ngram
     cand_tot_length = 0
@@ -136,7 +138,9 @@ def multi_bleu(cand_lines, refs_lines, tokenize_fn=tokenize, ngram=4, char=False
         candidate = tokenize_fn(candidate, char)
         references = []
         for ref_idx in range(refs_num):
-            references.append(tokenize_fn(refs_lines[ref_idx][k], char))
+            ref = refs_lines[ref_idx][k]
+            ref = re.sub('(@@ )|(@@ ?$)', '', ref) if ref_bpe is True else ref
+            references.append(tokenize_fn(ref, char))
         #references = map(tokenize_fn, references, [char for _ in references])
         #print(candidate)
         #print(references)
@@ -172,22 +176,22 @@ def multi_bleu(cand_lines, refs_lines, tokenize_fn=tokenize, ngram=4, char=False
 
     return score, prec_pc, brevity_penalty, cand_tot_length, ref_closest_length
 
-def multi_bleu_file(cand_file, ref_fpaths, cased=False, ngram=4, char=False):
+def multi_bleu_file(cand_file, ref_fpaths, cased=False, ngram=4, char=False, ref_bpe=False):
 
     wlog('\n' + '#' * 30 + ' multi-bleu ' + '#' * 30)
     tokenize_fn = tokenize if cased is True else tokenize_lower
-    wlog('Calculating case-{}sensitive tokenized {}-gram BLEU ...'.format('' if cased else 'in', ngram))
+    wlog('Calculating case-{}sensitive tokenized {}-gram BLEU, remove refbpe: {} ...'.format('' if cased else 'in', ngram, ref_bpe))
     wlog('\tcandidate file: {}'.format(cand_file))
     wlog('\treferences file:')
     for ref in ref_fpaths: wlog('\t\t{}'.format(ref))
 
-    cand_f = open(cand_file, 'r')
-    refs_f = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
+    cand_f = io.open(cand_file, mode='r', encoding='utf-8')
+    refs_f = [io.open(ref_fpath, mode='r', encoding='utf-8') for ref_fpath in ref_fpaths]
 
     cand_lines = cand_f.readlines()
     refs_lines = [ref_f.readlines() for ref_f in refs_f]
     score, precisions, brevity_penalty, cand_tot_length, ref_closest_length = \
-        multi_bleu(cand_lines, refs_lines, tokenize_fn, ngram, char=char)
+        multi_bleu(cand_lines, refs_lines, tokenize_fn, ngram, char=char, ref_bpe=ref_bpe)
 
     cand_f.close()
     for ref_f in refs_f: ref_f.close()
@@ -207,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('-lc', help='Lowercase', action='store_true')
     parser.add_argument('-c', '--candidate', dest='c', required=True, help='translation file')
     parser.add_argument('-r', '--references', dest='r', required=True, help='reference[0, 1, ...]')
+    parser.add_argument('-refbpe', '--ref-bpe', dest='refbpe', action='store_true')
     args = parser.parse_args()
 
     '''
@@ -228,7 +233,7 @@ if __name__ == "__main__":
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    multi_bleu_file(cand_file, ref_fpaths, cased, 4)
+    multi_bleu_file(cand_file, ref_fpaths, cased, 4, ref_bpe=args.refbpe)
 
 
 
