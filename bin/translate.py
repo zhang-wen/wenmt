@@ -18,7 +18,6 @@ numpy.set_printoptions(sys.maxsize)
 
 if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
 elif wargs.decoder_type == 'att': from searchs.nbs_t2t import *
-if wargs.search_mode == 2: from searchs.cp import *
 
 class Translator(object):
 
@@ -296,13 +295,6 @@ class Translator(object):
             if C[0] != 0:
                 wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
                 wlog('Step[{}] stepout[{}]'.format(*C[2:]))
-
-        if self.search_mode == 2:
-            C = self.wcp.C
-            if C[0] != 0 and C[2] != 0:
-                wlog('Average Merging Rate [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
-                wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[3], C[2], C[3] / C[2]))
-                wlog('Step[{}] stepout[{}]'.format(*C[4:]))
 
         spend = time.time() - trans_start
         if words_cnt == 0: wlog('What ? No words generated when translating one file !!!')

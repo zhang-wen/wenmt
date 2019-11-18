@@ -2,11 +2,11 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'ende', 't2t_base'
+dataset, model_config = 'deen', 't2t_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 #gpu_ids = [7, 4,5,6]
-gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-#gpu_ids = [0, 1,2,3]
+#gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+gpu_ids = [0, 1]
 #gpu_ids = [7]
 batch_size = 40 if batch_type == 'sents' else 4096
 #gpu_id = None
@@ -113,8 +113,8 @@ if dataset == 'toy':
 elif dataset == 'deen':
     dir_data = work_dir+'data.iwslt/'
     #val_tst_dir = '/home/wen/3.data/iwslt14_deen/prep/'
-    val_tst_dir = '/ceph_nmt/wenzhang/2.data/mt/iwslt14_deen/iwslt14.tokenized.de-en/'
-    #val_tst_dir = '/home/wen/3.data/iwslt14_deen/iwslt14.tokenized.de-en/'
+    #val_tst_dir = '/ceph_nmt/wenzhang/2.data/mt/iwslt14_deen/iwslt14.tokenized.de-en/'
+    val_tst_dir = '/home/wen/3.data/iwslt14_deen/iwslt14.tokenized.de-en/'
     val_src_suffix, val_ref_suffix, val_prefix, tests_prefix = 'de', 'en', 'valid', ['test']
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 1024, 4, 6, 6
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
