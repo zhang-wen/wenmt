@@ -217,118 +217,6 @@ class Translator(object):
                 'total_aligns': total_aligns
                 }
 
-    def single_trans_file(self, xs_inputs, src_labels_fname=None, batch_tst_data=None):
-
-        n_batches = len(xs_inputs)   # number of batchs, here is sentences number
-        point_every, number_every = int(math.ceil(n_batches/100)), int(math.ceil(n_batches/10))
-        total_trans = []
-        total_aligns = [] if self.print_att is True else None
-        sent_no, words_cnt = 0, 0
-
-        fd_attent_matrixs, trgs = None, None
-        if batch_tst_data != None:
-            wlog('\nStarting force decoding ...')
-            fd_attent_matrixs, trgs = self.force_decoding(batch_tst_data)
-            wlog('Finish force decoding ...')
-
-        trans_start = time.time()
-        for bidx in range(n_batches):
-            # (idxs, tsrcs, lengths, src_mask)
-            xs_nL = xs_inputs[bidx][1]
-            # idxs, tsrcs, ttrgs_for_files, lengths, src_mask, trg_mask_for_files
-            for no in range(xs_nL.size(0)): # batch size, 1 for valid
-                x_filter = sent_filter(xs_nL[no].tolist())
-                if src_labels_fname != None:
-                    assert self.print_att == None, 'split sentence does not suport print attention'
-                    # split by segment labels file
-                    segs = self.segment_src(x_filter, labels[bidx].strip().split(' '))
-                    trans = []
-                    for seg in segs:
-                        seg_trans, ids, _, _, _ = self.trans_onesent(seg)
-                        words_cnt += len(ids)
-                        trans.append(seg_trans)
-                    # merge by order
-                    trans = ' '.join(trans)
-                else:
-                    if fd_attent_matrixs == None:   # need translate
-                        trans, ids, _, _, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
-                        trg_toks = [] if trans == '' else trans.split(' ')
-                        if trans == '': wlog('What ? null translation ... !')
-                        words_cnt += len(ids)
-                    else:
-                        # attention: feed previous word -> get the alignment of next word !!!
-                        attent_matrix = fd_attent_matrixs[bidx] # do not remove <b>
-                        #print attent_matrix
-                        trg_toks = sent_filter(trgs[bidx]) # remove <b> and <e>
-                        trg_toks = [self.tvcb_i2w[wid] for wid in trg_toks]
-                        trans = ' '.join(trg_toks)
-                        words_cnt += len(trg_toks)
-
-                    # get alignment from attent_matrix for one translation
-                    if attent_matrix != None:
-                        # maybe generate null translation, fault-tolerant here
-                        if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
-                        else:
-                            if isinstance(self.svcb_i2w, dict):
-                                src_toks = [self.svcb_i2w[wid] for wid in x_filter]
-                            else:
-                                #print type(self.svcb_i2w)
-                                # <class 'tools.text_encoder.SubwordTextEncoder'>
-                                src_toks = self.svcb_i2w.decode(x_filter)
-                                if len(src_toks) == 2: _, src_toks = src_toks
-                                #print src_toks
-                            # attent_matrix: (trgL, srcL) numpy
-                            alnStr = print_attention_text(attent_matrix, src_toks, trg_toks)
-                        total_aligns.append(alnStr)
-
-                total_trans.append(trans)
-                sent_no += 1
-                if ( sent_no % point_every ) == 0:
-                    wlog('.', newline=0)
-                    sys.stderr.flush()
-                if ( sent_no % number_every ) == 0: wlog(sent_no, newline=0)
-
-        wlog('Sentences number: {}'.format(sent_no))
-
-        if self.search_mode == 1:
-            C = self.nbs.C
-            if C[0] != 0:
-                wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
-                wlog('Step[{}] stepout[{}]'.format(*C[2:]))
-
-        spend = time.time() - trans_start
-        if words_cnt == 0: wlog('What ? No words generated when translating one file !!!')
-        else:
-            wlog('Word-Level spend: [{}/{} = {}/w], [{}/{:7.2f}s = {:7.2f} w/s]'.format(
-                format_time(spend), words_cnt, format_time(spend / words_cnt),
-                words_cnt, spend, words_cnt/spend))
-
-        wlog('Done ...')
-        if total_aligns != None: total_aligns = '\n'.join(total_aligns) + '\n'
-        return '\n'.join(total_trans) + '\n', total_aligns
-
-    def segment_src(self, src_list, labels_list):
-
-        #print len(src_list), len(labels_list)
-        assert len(src_list) == len(labels_list)
-        segments, seg = [], []
-        for i in range(len(src_list)):
-            c, l = src_list[i], labels_list[i]
-            if l == 'S':
-                segments.append([c])
-            elif l == 'E':
-                seg.append(c)
-                segments.append(seg)
-                seg = []
-            elif l == 'B':
-                if len(seg) > 0: segments.append(seg)
-                seg = []
-                seg.append(c)
-            else:
-                seg.append(c)
-
-        return segments
-
     def write_file_eval(self, out_fname, trans, data_prefix, alns=None, test=False):
 
         if alns != None:
@@ -384,9 +272,7 @@ class Translator(object):
         for _, test_prefix in zip(tests_data, wargs.tests_prefix):
 
             wlog('\nTranslating test dataset {}'.format(test_prefix))
-            label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
-                                                 test_prefix) if wargs.segments else None
-            rst = self.batch_trans_file(tests_data[test_prefix], label_fname)
+            rst = self.batch_trans_file(tests_data[test_prefix])
             trans, tloss, wloss, sloss, alns = rst['translation'], rst['total_loss'], \
                     rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
             outprefix = wargs.dir_tests + '/' + test_prefix + '/trans'
@@ -397,10 +283,7 @@ class Translator(object):
         self.model.eval()
 
         wlog('\nTranslating validation dataset {}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix))
-        label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
-                                             wargs.val_prefix) if wargs.segments else None
-        #trans, alns = self.single_trans_file(valid_data, label_fname)
-        rst = self.batch_trans_file(valid_data, label_fname, valid=True)
+        rst = self.batch_trans_file(valid_data, valid=True)
         trans, tloss, wloss, sloss, alns = rst['translation'], rst['total_loss'], \
                 rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
 

@@ -131,7 +131,7 @@ elif dataset == 'zhen':
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.2, 0.2, 0.3
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
     learning_rate, warmup_steps, beta_2, adam_epsilon = 0.0007, 4000, 0.98, 1e-08
     warmup_init_lr, min_lr = 1e-07, 1e-09
     max_grad_norm = 0.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
@@ -197,14 +197,6 @@ beam_size, alpha_len_norm, beta_cover_penalty = 5, 0.6, 0.
 valid_batch_size, test_batch_size = 128, 128
 print_att = True
 
-segments = False
-file_tran_dir, seg_val_tst_dir = 'wexp-gpu-nist03', 'orule_1.7'
-
-''' relation network: convolutional layer '''
-fltr_windows = [1, 3]
-d_fltr_feats = [128, 256]
-d_mlp = 256
-
 ''' Scheduled Sampling of Samy bengio's paper '''
 greed_sampling = False
 greed_gumbel_noise = 0.5     # None: w/o noise
@@ -218,8 +210,6 @@ if ss_type == 1:
 if ss_type == 2: assert ss_k < 1., 'requires ss_k < 1.'
 if ss_type == 3: assert ss_k >= 1., 'requires ss_k >= 1.'
 
-nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
-# car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
 
