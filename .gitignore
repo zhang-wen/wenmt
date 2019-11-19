@@ -24,7 +24,7 @@ nohup.out*
 sb*
 
 data/*
-data*
+#data*
 wmodel*
 wmodel/
 wvalid/
