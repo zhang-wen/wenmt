@@ -6,8 +6,7 @@ import torch.nn as nn
 from tools.utils import *
 from tools.utils import PAD
 import torch.nn.functional as F
-#from .nn_utils import PositionwiseFeedForward
-#from models.nn_utils import Linear
+from models.nn_utils import LayerNorm
 
 '''
 We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending
@@ -61,21 +60,6 @@ class PositionwiseFeedForward(nn.Module):
     def forward(self, x):
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
 
-class LayerNorm(nn.Module):
-    "Construct a layernorm module (See citation for details)."
-    def __init__(self, features, eps=1e-5):
-        super(LayerNorm, self).__init__()
-        self.a_2 = nn.Parameter(tc.ones(features))
-        wlog('*Ones init a in layernorm {}'.format(self.a_2.size()))
-        self.b_2 = nn.Parameter(tc.zeros(features))
-        wlog('*Zeros init b in layernorm {}'.format(self.b_2.size()))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
-
 '''
     Args:
         d_model(int): the dimension of keys/values/queries in
@@ -102,7 +86,6 @@ class SelfAttSublayer(nn.Module):
     def __init__(self, size, dropout):
         super(SelfAttSublayer, self).__init__()
         self.norm = LayerNorm(size)
-        #self.norm = nn.LayerNorm(size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, sublayer):
@@ -123,7 +106,6 @@ class SelfAttEncoder(nn.Module):
         self.src_emb = src_emb
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
-        #self.norm = nn.LayerNorm(layer.size)
 
     def forward(self, x, mask=None):
         _, x = self.src_emb(x)
@@ -162,7 +144,6 @@ class SelfAttDecoder(nn.Module):
         self.trg_emb = trg_emb
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
-        #self.norm = nn.LayerNorm(layer.size)
 
     def forward(self, x, memory, src_mask=None):
         if src_mask is not None: src_mask = src_mask.unsqueeze(-2)

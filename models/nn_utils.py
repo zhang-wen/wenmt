@@ -43,11 +43,13 @@ class MyLogSoftmax(nn.Module):
 
 '''Layer normalize the tensor x, averaging over the last dimension.'''
 class LayerNorm(nn.Module):
-
-    def __init__(self, features, eps=1e-6):
+    "Construct a layernorm module (See citation for details)."
+    def __init__(self, features, eps=1e-5):
         super(LayerNorm, self).__init__()
         self.a_2 = nn.Parameter(tc.ones(features))
+        wlog('*Ones init a in layernorm {}'.format(self.a_2.size()))
         self.b_2 = nn.Parameter(tc.zeros(features))
+        wlog('*Zeros init b in layernorm {}'.format(self.b_2.size()))
         self.eps = eps
 
     def forward(self, x):
@@ -55,33 +57,6 @@ class LayerNorm(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
 
-class PositionwiseFeedForward(nn.Module):
-    '''
-        A two-layer Feed-Forward Network
-        Args:
-            size(int): the size of input for the first-layer of the FFN.
-            hidden_size(int): the hidden layer size of the second-layer of the FNN.
-            droput(float): dropout probability(0-1.0).
-    '''
-    def __init__(self, input_size=512, filter_size=2048, output_size=512, dropout_prob=0.1):
-
-        super(PositionwiseFeedForward, self).__init__()
-        self.filter_transform = Linear(input_size, filter_size, bias=True)
-        self.relu = nn.ReLU()
-        self.dropout_prob = dropout_prob
-        self.output_transform = Linear(filter_size, output_size, bias=True)
-
-    def forward(self, x):
-
-        # (batch_size, input_len, model_dim) -> (batch_size, input_len, model_dim)
-        x = self.filter_transform(x)
-        x = self.relu(x)
-
-        x = F.dropout(x, p=self.dropout_prob, training=self.training)
-
-        x = self.output_transform(x)
-
-        return x
 
 def Linear(in_features, out_features, bias=True):
     m = nn.Linear(in_features, out_features, bias)
@@ -91,3 +66,20 @@ def Linear(in_features, out_features, bias=True):
         nn.init.constant_(m.bias, 0.)
         wlog('*Zeros init linear bias {}'.format(m.bias.size()))
     return m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
