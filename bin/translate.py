@@ -244,19 +244,6 @@ class Translator(object):
             proc_bpe(bpe_fname, out_fname)
             wlog('done')
 
-        if wargs.with_postproc is True:
-            opost_name = '{}.opost'.format(out_fname)
-            wlog('copy {} to {} ... '.format(out_fname, opost_name), 0)
-            #os.system('cp {} {}'.format(out_fname, opost_name))
-            copyfile(out_fname, opost_name)
-            assert os.path.exists(opost_name), 'opost file do not exist ...'
-            wlog('done')
-            wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
-            os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
-            wlog('done')
-            mteval_bleu_opost = mteval_bleu_file(opost_name, ref_fpaths, cased=wargs.cased, ref_bpe=wargs.ref_bpe)
-            os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
-
         mteval_bleu = mteval_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu, ref_bpe=wargs.ref_bpe)
         multi_bleu = multi_bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu, ref_bpe=wargs.ref_bpe)
         #mteval_bleu = mteval_bleu_file(out_fname + '.seg.plain', ref_fpaths)

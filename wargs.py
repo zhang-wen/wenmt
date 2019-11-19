@@ -7,33 +7,27 @@ batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do 
 #gpu_ids = [7, 4,5,6]
 #gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
 gpu_ids = [0, 1]
-#gpu_ids = [7]
 batch_size = 40 if batch_type == 'sents' else 4096
 #gpu_id = None
 n_co_models = 1
 s_step_decay = 300 * n_co_models
 e_step_decay = 3000 * n_co_models
-''' directory to save model, validation output and test output '''
 import os
 def getdir():
     return os.path.abspath('.') + '/'
-#work_dir = '/ceph_nmt/wenzhang/1.research/mt/baseline/iwslt_deen/wnmt_t2t_base_xavier_ln01_clip25_lr0.0005_4000_4096_0.3_2'
 print('Working in {}'.format(getdir()))
 work_dir=getdir()
+''' directory to save model, validation output and test output '''
 dir_model, dir_valid, dir_tests = work_dir+'wmodel', work_dir+'wvalid', work_dir+'wtests'
 ''' vocabulary '''
 n_src_vcb_plan, n_trg_vcb_plan = 30000, 30000
-small, epoch_eval, src_char, char_bleu, eval_small = False, False, False, False, True
-cased, with_bpe, ref_bpe, with_postproc, use_multi_bleu = False, False, False, False, True
+small, epoch_eval, src_char, char_bleu = False, False, False, False
+cased, with_bpe, ref_bpe, use_multi_bleu = False, False, False, True
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 lr_update_way, param_init_D, learning_rate = 'chen', 'U', 0.001  # 'noam' or 'chen'
 beta_1, beta_2, weight_decay, u_gain, adam_epsilon, warmup_steps, chunk_size = 0.9, 0.98, 0., 0.01, 1e-08, 500, 20
 max_grad_norm = 5.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
 d_dec_hid, d_model = 512, 512
-''' evaluate settings '''
-eval_valid_from = 500 if eval_small else 50000
-eval_valid_freq = 100 if eval_small else 5000
-attention_type = 'multihead_additive'
 input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
 encoder_normalize_before, decoder_normalize_before, max_epochs, max_update = False, False, 15, 30000
 
@@ -55,13 +49,13 @@ if model_config == 't2t_big':
     learning_rate, warmup_steps, u_gain, beta_2 = 0.2, 8000, 0.08, 0.997
     chunk_size, max_grad_norm = 1, 0.
 if model_config == 'gru_base':
-    encoder_type, decoder_type = 'gru', 'gru'   # 'att', 'gru'
+    encoder_type, decoder_type, attention_type = 'gru', 'gru', 'multihead_additive'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 8000, 96000, 8000
     small = True
 if model_config == 'gru_big':
-    encoder_type, decoder_type = 'gru', 'gru'   # 'att', 'gru'
+    encoder_type, decoder_type, attention_type = 'gru', 'gru', 'multihead_additive'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 1024, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 8000, 64000, 8000
@@ -154,8 +148,6 @@ n_look, fix_looking = 5, False
 search_mode = 1
 with_batch, ori_search, vocab_norm = 1, 0, 1
 len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
-with_mv, avg_att, m_threshold, ngram = 0, 0, 100., 3
-merge_way = 'Y'
 beam_size, alpha_len_norm, beta_cover_penalty = 5, 0.6, 0.
 valid_batch_size, test_batch_size = 128, 128
 print_att = True
@@ -173,7 +165,6 @@ if ss_type == 1:
 if ss_type == 2: assert ss_k < 1., 'requires ss_k < 1.'
 if ss_type == 3: assert ss_k >= 1., 'requires ss_k >= 1.'
 
-#sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
 
 display_freq = 100 if small else 1000

@@ -46,17 +46,6 @@ if __name__ == '__main__':
     A.add_argument('--len-norm', dest='len_norm', type=int, default=1,
                    help='During searching, whether we normalize accumulated loss by length.')
 
-    A.add_argument('--use-mv', dest='use_mv', type=int, default=0,
-                   help='We use manipulation vacabulary by add this parameter. (DEFAULT=0)')
-
-    A.add_argument('--merge-way', dest='merge_way', default='Him1',
-                   help='merge way in cube pruning. (DEFAULT=s_im1. Him1/Hi/AiKL/LM)')
-
-    A.add_argument('--avg-att', dest='avg_att', type=int, default=0,
-                   help='Whether we average attention vector. (DEFAULT=0)')
-
-    A.add_argument('--m-threshold', dest='m_threshold', type=float, default=0.,
-                   help='a super-parameter to merge in cube pruning. (DEFAULT=0. no merge)')
     '''
 
     args = A.parse_args()
@@ -68,11 +57,6 @@ if __name__ == '__main__':
     useBatch = args.use_batch
     vocabNorm = args.vocab_norm
     lenNorm = args.len_norm
-    useMv = args.use_mv
-    mergeWay = args.merge_way
-    avgAtt = args.avg_att
-    m_threshold = args.m_threshold
-    switchs = [useBatch, vocabNorm, lenNorm, useMv, mergeWay, avgAtt]
     '''
 
     wlog('Starting load vocabularies ... ')
@@ -169,7 +153,6 @@ if __name__ == '__main__':
             rst['word_level_loss'], rst['sent_level_loss'], rst['total_aligns']
     if wargs.search_mode == 0: p1 = 'greedy'
     elif wargs.search_mode == 1: p1 = 'nbs'
-    elif wargs.search_mode == 2: p1 = 'cp'
     p2 = 'gpu' if args.gpu_ids is not None else 'cpu'
     p3 = 'wb' if wargs.with_batch else 'wob'
 

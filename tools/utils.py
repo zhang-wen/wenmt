@@ -326,24 +326,15 @@ def dec_conf():
     wlog('\n######################### Construct Decoder #########################\n')
     if wargs.search_mode == 0: wlog('# Greedy search => ')
     elif wargs.search_mode == 1: wlog('# Naive beam search => ')
-    elif wargs.search_mode == 2: wlog('# Cube pruning => ')
 
     wlog('\t Beam size: {}'
-         '\n\t KL_threshold: {}'
          '\n\t Batch decoding: {}'
          '\n\t Vocab normalized: {}'
-         '\n\t Length normalized: {}'
-         '\n\t Manipulate vocab: {}'
-         '\n\t Cube pruning merge way: {}'
-         '\n\t Average attent: {}\n\n'.format(
+         '\n\t Length normalized: {}\n\n'.format(
              wargs.beam_size,
-             wargs.m_threshold,
              True if wargs.with_batch else False,
              True if wargs.vocab_norm else False,
-             wargs.len_norm,
-             True if wargs.with_mv else False,
-             wargs.merge_way,
-             True if wargs.avg_att else False
+             wargs.len_norm
          )
     )
 
