@@ -9,6 +9,8 @@ import numpy
 import string
 #from zhon import hanzi
 
+# implement as mteval-v11b.pl
+
 def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))

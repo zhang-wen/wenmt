@@ -9,7 +9,7 @@ np.set_printoptions(threshold=sys.maxsize)
 np.set_printoptions(precision=5)
 
 import wargs
-from tools.utils import BOS, EOS, debug, init_beam, part_sort, lp_cp
+from tools.utils import BOS, EOS, debug, init_beam, lp_cp
 
 class Nbs(object):
 
@@ -181,7 +181,6 @@ class Nbs(object):
                 #    cand_scores[:, EOS] = float('+inf')
                 cand_scores_flat = cand_scores.flatten()
                 #debug('cand_scores_flat {}'.format(cand_scores_flat.size()))
-                #ranks_flat = part_sort(cand_scores_flat, self.k - len(self.hyps))
                 #ranks_flat = cand_scores_flat.topk(k=self.k - len(self.hyps), dim=-1, largest=False, sorted=True)
                 if wargs.len_norm == 0: norm_scores = cand_scores_flat
                 elif wargs.len_norm == 1: norm_scores = cand_scores_flat / i

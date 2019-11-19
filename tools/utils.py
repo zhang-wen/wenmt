@@ -56,34 +56,6 @@ def toVar(x, isCuda=None, volatile=False):
 
     return x
 
-def clip(x, rate=0.):
-
-    b1 = (x < 1 - rate).float()
-    b2 = (x > 1 + rate).float()
-    b3 = (((1 - rate <= x) + (x <= 1 + rate)) > 1).float()
-
-    return b1 * (1 - rate) + b2 * (1 + rate) + b3 * x
-
-def rm_elems_byid(l, ids):
-
-    isTensor = isinstance(l, tc.FloatTensor)
-    isTorchVar = isinstance(l, tc.autograd.variable.Variable)
-    if isTensor is True: l = l.transpose(0, 1).tolist()
-    if isTorchVar is True: l = l.transpose(0, 1).data.tolist() #  -> (B, srcL)
-
-    if isinstance(ids, int): del l[ids]
-    elif len(ids) == 1: del l[ids[0]]
-    else:
-        for idx in ids: l[idx] = PAD_WORD
-        l = filter(lambda a: a != PAD_WORD, l)
-
-    if isTensor is True: l = tc.Tensor(l).transpose(0, 1)  # -> (srcL, B')
-    if isTorchVar is True:
-        l = Variable(tc.Tensor(l).transpose(0, 1), requires_grad=False, volatile=True)
-        if wargs.gpu_id: l = l.cuda()
-
-    return l
-
 # x, y are torch Tensors
 def cor_coef(a, b, eps=1e-20):
 
@@ -494,35 +466,6 @@ def lp_cp(bp, beam_idx, bidx, beam):
 
     return lp, cp
 
-'''
-    a: add previous input tensor
-    n: apply normalization
-    d: apply dropout
-  For example, if sequence=="dna", output is normalize(dropout(x))+previous_value
-  Args:
-    pre_layer_in: Tensor to be added as a residual connection ('a')
-    pre_layer_out: Tensor to be transformed.
-    handle_type: 'dna'
-    normlizer: None, Layer_Norm, nn.BatchNorm1d, 'noam'
-    epsilon: a float (parameter for normalization)
-    dropout_rate: a float
-  Returns:
-    a Tensor
-'''
-def layer_prepostprocess(pre_layer_out, pre_layer_in=None, handle_type=None, normlizer=None,
-                         epsilon=1e-6, dropout_rate=0., training=True):
-    if handle_type is None: return pre_layer_out
-    if 'a' in handle_type: assert pre_layer_in is not None, 'Residual requires previous input !'
-    for c in handle_type:
-      if c == 'a': pre_layer_out += pre_layer_in
-      elif c == 'n':
-        if normlizer == 'noam': # One version of layer normalization
-            pre_layer_out = F.normalize(pre_layer_out, p=2, dim=-1, eps=1e-20)
-        else: pre_layer_out = normlizer(pre_layer_out)
-      elif c == 'd': pre_layer_out = F.dropout(pre_layer_out, p=dropout_rate, training=training)
-      else: wlog('Unknown handle type {}'.format(c))
-    return pre_layer_out
-
 def schedule_sample_word(_h, _g, ss_eps, y_tm1_gold, y_tm1_hypo):
 
     if y_tm1_hypo is None: return y_tm1_gold
@@ -630,18 +573,6 @@ def proc_bpe(input_fname, output_fname):
     fin.close()
 
     contend = re.sub('(@@ )|(@@ ?$)', '', contend)
-
-    fout = io.open(output_fname, mode='w', encoding='utf-8')
-    fout.write(contend)
-    fout.close()
-
-def proc_luong(input_fname, output_fname):
-
-    fin = io.open(input_fname, mode='r', encoding='utf-8')
-    contend = fin.read()
-    fin.close()
-
-    contend = re.sub('( ?##AT##-##AT## ?)', '', contend)
 
     fout = io.open(output_fname, mode='w', encoding='utf-8')
     fout.write(contend)

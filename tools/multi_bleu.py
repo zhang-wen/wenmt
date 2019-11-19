@@ -10,6 +10,8 @@ from math import exp, log
 from functools import reduce
 from collections import Counter
 
+# implement as multi-bleu.perl
+
 def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))
