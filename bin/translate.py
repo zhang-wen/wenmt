@@ -16,7 +16,7 @@ from tools.mteval_bleu import mteval_bleu_file
 from tools.multi_bleu import multi_bleu_file
 numpy.set_printoptions(sys.maxsize)
 
-if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
+if wargs.decoder_type in ('gru'): from searchs.nbs import *
 elif wargs.decoder_type == 'att': from searchs.nbs_t2t import *
 
 class Translator(object):

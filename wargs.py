@@ -36,21 +36,11 @@ eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
 input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
 encoder_normalize_before, decoder_normalize_before, max_epochs, max_update = False, False, 15, 30000
-if model_config == 't2t_tiny':
-    encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
+
+if model_config == 't2t_base':
+    encoder_type, decoder_type = 'att', 'att'   # 'att', 'gru'
     lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 2, 2
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
-    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 500, 0.08, 0.98
-    warmup_init_lr, min_lr = 1e-07, 1e-09
-    s_step_decay, e_step_decay = 300, 3000
-    small, eval_valid_from, eval_valid_freq = True, 3000, 200
-    epoch_eval, max_grad_norm = True, 0.
-    batch_size = 40 if batch_type == 'sents' else 2048
-if model_config == 't2t_base':
-    encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way, param_init_D = 'invsqrt', 'X'    # invsqrt
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 6, 6
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
     learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 4000, 0.08, 0.98
@@ -58,50 +48,23 @@ if model_config == 't2t_base':
     chunk_size, max_grad_norm = 20, 0.
     small = True
 if model_config == 't2t_big':
-    encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
+    encoder_type, decoder_type = 'att', 'att'   # 'att', 'gru'
     lr_update_way, param_init_D = 'noam', 'X'
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 4096, 16, 6, 6
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
     learning_rate, warmup_steps, u_gain, beta_2 = 0.2, 8000, 0.08, 0.997
     chunk_size, max_grad_norm = 1, 0.
-if model_config == 'tgru_tiny':
-    encoder_type, decoder_type = 'tgru', 'tgru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
-    learning_rate, warmup_steps, u_gain, beta_2, adam_epsilon = 0.001, 500, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 500, 32000, 500
-    small, epoch_eval = True, True
-    batch_size = 40 if batch_type == 'sents' else 2048
-if model_config == 'tgru_base':
-    encoder_type, decoder_type = 'tgru', 'tgru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
-    warmup_steps, u_gain, beta_2, adam_epsilon = 500, 0.08, 0.999, 1e-6
-    chunk_size, s_step_decay, e_step_decay = 10, 4000, 32000
-if model_config == 'tgru_big':
-    encoder_type, decoder_type = 'tgru', 'tgru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers, n_head = 1024, 1024, 1024, 1024, 5, 5, 16
-    warmup_steps, u_gain, beta_2, adam_epsilon = 500, 0.08, 0.999, 1e-6
-    chunk_size, s_step_decay, e_step_decay = 1, 4000, 32000
-if model_config == 'gru_tiny':
-    encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
-    learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 1000, 5000, 8000
-    eval_valid_from, eval_valid_freq = 3000, 300
-    small, epoch_eval, max_epochs = True, True, 50
-    batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
-    encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
+    encoder_type, decoder_type = 'gru', 'gru'   # 'att', 'gru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 8000, 96000, 8000
     small = True
-    #snip_size = 5
 if model_config == 'gru_big':
-    encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
+    encoder_type, decoder_type = 'gru', 'gru'   # 'att', 'gru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 1024, 1024, 1024, 1024, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 8000, 64000, 8000
-    #snip_size = 10
 
 ''' training data '''
 dir_data = work_dir+'data/'
@@ -161,7 +124,7 @@ elif dataset == 'ende':
 src_vcb, trg_vcb = dir_data + 'src.vcb', dir_data + 'trg.vcb'
 train_prefix, train_src_suffix, train_trg_suffix = 'train', 'src', 'trg'
 proj_share_weight, embs_share_weight = False, False
-position_encoding = True if (encoder_type in ('att','tgru') and decoder_type in ('att','tgru')) else False
+position_encoding = True if (encoder_type in ('att') and decoder_type in ('att')) else False
 
 ''' validation data '''
 dev_max_seq_len = 10000000

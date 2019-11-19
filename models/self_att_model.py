@@ -7,8 +7,6 @@ from tools.utils import *
 from tools.utils import PAD
 import torch.nn.functional as F
 #from .nn_utils import PositionwiseFeedForward
-#from .attention import MultiHeadAttention
-#from .attention import MultiheadAttention
 #from models.nn_utils import Linear
 
 '''
