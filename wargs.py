@@ -78,7 +78,7 @@ elif dataset == 'deen':
     learning_rate, warmup_steps, beta_2, adam_epsilon = 0.001, 4000, 0.98, 1e-08
     warmup_init_lr, min_lr = 1e-07, 1e-09
     max_grad_norm = 25.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
-    eval_valid_from, eval_valid_freq = 0, 1000
+    eval_valid_from, eval_valid_freq = 8000, 1000
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
     max_epochs, with_bpe, ref_bpe, cased, max_update = 1000, True, True, True, 20000    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
     batch_size = 40 if batch_type == 'sents' else 4096
