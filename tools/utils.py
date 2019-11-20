@@ -220,8 +220,6 @@ def init_beam(beam, B=1, gpu_id=0, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))
     elif wargs.len_norm == 2:
         beam[0] = [[ (loss_0, None, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
-    #elif with_batch == 0:
-    #    beam[0].append((loss_0, s0, BOS, 0))
     else:
         beam[0] = [[ (loss_0, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
 
@@ -300,12 +298,8 @@ def dec_conf():
     elif wargs.search_mode == 1: wlog('# Naive beam search => ')
 
     wlog('\t Beam size: {}'
-         '\n\t Batch decoding: {}'
-         '\n\t Vocab normalized: {}'
          '\n\t Length normalized: {}\n\n'.format(
              wargs.beam_size,
-             True if wargs.with_batch else False,
-             True if wargs.vocab_norm else False,
              wargs.len_norm
          )
     )

@@ -52,9 +52,7 @@ class Nbs(object):
         self.B_tran_cands = [ [] for _ in range(self.B) ]
         self.B_aprob_cands = [[] for _ in range(self.B)] if self.print_att is True else None
 
-        if not wargs.with_batch: best_trans, best_loss = self.search()
-        elif wargs.ori_search:   best_trans, best_loss = self.ori_batch_search()
-        else:                    self.batch_search()
+        self.batch_search()
         # best_trans w/o <bos> and <eos> !!!
         #tc.cuda.empty_cache()
 

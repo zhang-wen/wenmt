@@ -8,7 +8,6 @@ import time
 import argparse
 import torch as tc
 import torch.nn as nn
-from torch import cuda
 
 import sys
 sys.path.append(os.getcwd())
@@ -29,20 +28,8 @@ if __name__ == '__main__':
                    help='which gpu device to decode on')
 
     '''
-    A.add_argument('--search-mode', dest='search_mode', default=2,
-                   help='0: Greedy, 1&2: naive beam search, 3: cube pruning')
-
+    A.add_argument('--search-mode', dest='search_mode', default=2, help='0: Greedy, 1: naive beam search')
     A.add_argument('--beam-size', dest='beam_size', default=wargs.beam_size, help='beamsize')
-
-    A.add_argument('--use-valid', dest='use_valid', type=int, default=0,
-                   help='Translate valid set. (DEFAULT=0)')
-
-    A.add_argument('--use-batch', dest='use_batch', type=int, default=0,
-                   help='Whether we apply batch on beam search. (DEFAULT=0)')
-
-    A.add_argument('--vocab-norm', dest='vocab_norm', type=int, default=1,
-                   help='Whether we normalize the distribution of vocabulary (DEFAULT=1)')
-
     A.add_argument('--len-norm', dest='len_norm', type=int, default=1,
                    help='During searching, whether we normalize accumulated loss by length.')
 
@@ -53,9 +40,6 @@ if __name__ == '__main__':
     '''
     search_mode = args.search_mode
     beam_size = args.beam_size
-    useValid = args.use_valid
-    useBatch = args.use_batch
-    vocabNorm = args.vocab_norm
     lenNorm = args.len_norm
     '''
 
@@ -154,14 +138,12 @@ if __name__ == '__main__':
     if wargs.search_mode == 0: p1 = 'greedy'
     elif wargs.search_mode == 1: p1 = 'nbs'
     p2 = 'gpu' if args.gpu_ids is not None else 'cpu'
-    p3 = 'wb' if wargs.with_batch else 'wob'
 
-    outdir = 'wout_{}_{}_{}'.format(p1, p2, p3)
-    if wargs.ori_search: outdir = '{}_{}'.format(outdir, 'ori')
+    outdir = 'wout_{}_{}'.format(p1, p2)
     init_dir(outdir)
     outprefix = '{}/{}'.format(outdir, args.input_file)
     # wout_nbs_gpu_wb_wvalid/nist06_
-    file_out = "{}_e{}_b{}_upd{}_k{}".format(outprefix, e_idx, e_bidx, n_steps, wargs.beam_size) 
+    file_out = "{}_e{}_b{}_upd{}_k{}".format(outprefix, e_idx, e_bidx, n_steps, wargs.beam_size)
 
     mteval_bleu = tor.write_file_eval(file_out, trans, args.input_file, alns)
     bleus_record_fname = '{}/record_bleu.log'.format(outdir)
@@ -172,13 +154,10 @@ if __name__ == '__main__':
 
     sfig = '{}/{}'.format(outdir, 'record_bleu.sfig')
     sfig_content = ('{} {} {} {} {}').format(
-        #alpha,
-        #beta,
         e_idx,
         e_bidx,
         wargs.search_mode,
         wargs.beam_size,
-        #kl,
         mteval_bleu
     )
     append_file(sfig, sfig_content)

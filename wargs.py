@@ -146,7 +146,6 @@ n_look, fix_looking = 5, False
 
 ''' decoder settings '''
 search_mode = 1
-with_batch, ori_search, vocab_norm = 1, 0, 1
 len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 beam_size, alpha_len_norm, beta_cover_penalty = 5, 0.6, 0.
 valid_batch_size, test_batch_size = 128, 128
