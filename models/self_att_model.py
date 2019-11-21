@@ -186,13 +186,15 @@ class Generator(nn.Module):
     def __init__(self, d_model, trg_word_emb):
         super(Generator, self).__init__()
         self.vcb_proj = nn.Linear(d_model, trg_word_emb.n_vocab, bias=True)
-        nn.init.normal_(self.vcb_proj.weight, mean=0, std=d_model ** -0.5)
-        nn.init.zeros_(self.vcb_proj.bias)
-        wlog('*Normal init map_vocab weight {}'.format(self.vcb_proj.weight.size()))
+        if wargs.proj_share_weight is False:
+            nn.init.normal_(self.vcb_proj.weight, mean=0, std=d_model ** -0.5)
+            wlog('*Normal init vcb_proj weight {}'.format(self.vcb_proj.weight.size()))
         if wargs.proj_share_weight is True:
-            assert d_model == wargs.d_trg_emb
-            wlog('copying weights of target word embedding into classifier')
+            assert d_model == trg_word_emb.n_embed, '{}, {}'.format(d_model, trg_word_emb.n_embed)
+            wlog('Copying weights of target word embedding into Generator')
             self.vcb_proj.weight = trg_word_emb.we.weight
+        nn.init.zeros_(self.vcb_proj.bias)
+        wlog('*Zero init vcb_proj bias {}'.format(self.vcb_proj.bias.size()))
         self.log_softmax = MyLogSoftmax()
 
     def pred_map(self, logit, noise=None):

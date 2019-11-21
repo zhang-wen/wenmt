@@ -118,12 +118,8 @@ def main():
                             wargs.position_encoding, prefix='Src')
     trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb, wargs.input_dropout,
                             wargs.position_encoding, prefix='Trg')
-    # share the embedding matrix - preprocess with share_vocab required.
-    if wargs.share_vocab:
-        if n_src_vcb != n_trg_vcb:
-            raise AssertionError('The `-share_vocab` should be set during '
-                                 'preprocess if you use share_embeddings!')
-        src_emb.we.weight = trg_emb.we.weight
+    # share the embedding matrix between the source and target
+    if wargs.share_vocab is True: src_emb.we.weight = trg_emb.we.weight
 
     nmtModel = build_NMT(src_emb, trg_emb)
 
@@ -200,8 +196,8 @@ def main():
     if device_ids is not None:
         wlog('push criterion onto GPU {} ... '.format(device_ids[0]), 0)
         criterion = criterion.to(device)
-        wlog('done.')                                                                                                         
-    
+        wlog('done.')
+
     BOWcriterion = BOWLossCriterion(trg_emb.n_vocab) if wargs.bow_loss is True else None
     if wargs.bow_loss is True and device_ids is not None:
         wlog('push bow criterion onto GPU {} ... '.format(device_ids[0]), 0)

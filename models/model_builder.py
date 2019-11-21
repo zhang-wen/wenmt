@@ -110,8 +110,8 @@ def build_NMT(src_emb, trg_emb):
 
     encoder = build_encoder(src_emb)
     decoder = build_decoder(trg_emb)
-    
-    from models.self_att_model import Generator 
+
+    from models.self_att_model import Generator
     generator = Generator(wargs.d_model if wargs.decoder_type == 'att' else 2 * wargs.d_enc_hid, trg_emb)
     if wargs.bow_loss is True:
         from models.self_att_model import BowMapper

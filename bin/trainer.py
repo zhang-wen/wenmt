@@ -127,10 +127,10 @@ class Trainer(object):
         if n_steps > 150000: wargs.eval_valid_freq = 1000
         if wargs.epoch_eval is not True and n_steps > wargs.eval_valid_from and \
            n_steps % wargs.eval_valid_freq == 0:
-            #eval_start = time.time()
+            eval_start = time.time()
             wlog('\nAmong epoch, e_batch:{}, n_steps:{}, {}-th validation ...'.format(e_bidx, n_steps, self.n_eval))
             self.mt_eval(e_idx, e_bidx, n_steps)
-            #self.eval_spend = time.time() - eval_start
+            self.eval_spend = time.time() - eval_start
 
     def mt_eval(self, e_idx, e_bidx, n_steps):
 
@@ -163,6 +163,8 @@ class Trainer(object):
         self.model_par.train()
         self.model.train()
 
+        show_start = 0.
+        self.look_nll, self.look_ytoks, self.look_ok_ytoks, self.look_sents, self.look_bow_loss = 0, 0, 0, 0, 0
         for e_idx in range(self.start_epoch, self.max_epochs + 1):
 
             wlog('\n{} Epoch [{}/{}] {}'.format('$'*30, e_idx, self.max_epochs, '$'*30))
@@ -170,9 +172,8 @@ class Trainer(object):
             # shuffle the training data for each epoch
             if self.epoch_shuffle_train: self.train_data.shuffle()
             self.e_nll, self.e_ytoks, self.e_ok_ytoks, self.e_sents = 0, 0, 0, 0
-            self.look_nll, self.look_ytoks, self.look_ok_ytoks, self.look_sents, self.look_bow_loss = 0, 0, 0, 0, 0
-            self.look_xtoks, self.look_spend, b_counter, eval_spend = 0, 0, 0, 0
-            epo_start = show_start = time.time()
+            self.look_xtoks, self.look_spend, b_counter, self.eval_spend = 0, 0, 0, 0
+            epo_start = time.time()
             if self.epoch_shuffle_batch: shuffled_bidx = tc.randperm(self.n_batches)
 
             #for bidx in range(self.n_batches):
@@ -205,7 +206,7 @@ class Trainer(object):
                     grad_checker(self.model, _checks)
                     if current_steps % wargs.display_freq == 0:
                         #wlog('look_ok_ytoks:{}, look_nll:{}, look_ytoks:{}'.format(self.look_ok_ytoks, self.look_nll, self.look_ytoks))
-                        ud = time.time() - show_start - self.look_spend - eval_spend
+                        ud = time.time() - show_start - self.look_spend - self.eval_spend
                         wlog(
                                 'Epo:{:>2}/{:>2} |[{:^5}/{} {:^5}] |acc:{:5.2f}% |{:4.2f}/{:4.2f}=nll:{:4.2f} |bow:{:4.2f}'
                             ' |w-ppl:{:4.2f} |x(y)/s:{:>4}({:>4})/{}={}({}) |x(y)/sec:{}({}) |lr:{:7.6f}'
@@ -222,7 +223,7 @@ class Trainer(object):
                                 self.optim.learning_rate, ud, (time.time() - train_start) / 60.)
                         )
                         self.look_nll, self.look_xtoks, self.look_ytoks, self.look_ok_ytoks, self.look_sents, self.look_bow_loss = 0, 0, 0, 0, 0, 0
-                        self.look_spend, eval_spend = 0, 0
+                        self.look_spend, self.eval_spend = 0, 0
                         show_start = time.time()
 
                     self.look_samples(current_steps)

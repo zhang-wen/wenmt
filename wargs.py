@@ -2,11 +2,11 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'ende', 't2t_base'
+dataset, model_config = 'deen', 't2t_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 #gpu_ids = [7, 4,5,6]
-gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-#gpu_ids = [0, 1]
+#gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+gpu_ids = [0, 1]
 batch_size = 40 if batch_type == 'sents' else 4096
 #gpu_id = None
 n_co_models = 1
@@ -119,7 +119,7 @@ elif dataset == 'ende':
 
 src_vcb, trg_vcb = dir_data + 'src.vcb', dir_data + 'trg.vcb'
 train_prefix, train_src_suffix, train_trg_suffix = 'train', 'src', 'trg'
-proj_share_weight, embs_share_weight = False, False
+proj_share_weight = True
 position_encoding = True if (encoder_type in ('att') and decoder_type in ('att')) else False
 
 ''' validation data '''
