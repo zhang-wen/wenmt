@@ -163,7 +163,7 @@ class Trainer(object):
         self.model_par.train()
         self.model.train()
 
-        show_start = 0.
+        show_start = time.time()
         self.look_nll, self.look_ytoks, self.look_ok_ytoks, self.look_sents, self.look_bow_loss = 0, 0, 0, 0, 0
         for e_idx in range(self.start_epoch, self.max_epochs + 1):
 
