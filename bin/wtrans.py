@@ -43,10 +43,15 @@ if __name__ == '__main__':
     lenNorm = args.len_norm
     '''
 
-    wlog('Starting load vocabularies ... ')
-    assert os.path.exists(wargs.src_vcb) and os.path.exists(wargs.trg_vcb), 'need vocabulary ...'
-    src_vocab = extract_vocab(None, wargs.src_vcb)
-    trg_vocab = extract_vocab(None, wargs.trg_vcb)
+    if wargs.share_vocab is False:
+        wlog('Starting load both vocabularies ... ')
+        assert os.path.exists(wargs.src_vcb) and os.path.exists(wargs.trg_vcb), 'need vocabulary ...'
+        src_vocab = extract_vocab(None, wargs.src_vcb)
+        trg_vocab = extract_vocab(None, wargs.trg_vcb)
+    else:
+        wlog('Starting load shared vocabularies ... ')
+        assert os.path.exists(wargs.src_vcb), 'need shared vocabulary ...'
+        trg_vocab = src_vocab = extract_vocab(None, wargs.src_vcb)
     n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
 
