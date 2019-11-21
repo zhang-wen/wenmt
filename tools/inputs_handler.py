@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 from __future__ import division
-from __future__ import absolute_import
+#from __future__ import absolute_import
 
 import io
 import os
@@ -10,6 +10,7 @@ import numpy
 import torch as tc
 from collections import defaultdict
 
+sys.path.append('./')
 import wargs
 from tools.utils import *
 from tools.inputs import *
@@ -21,7 +22,9 @@ if sys.getdefaultencoding() != defaultencoding:
     reload(sys)
     sys.setdefaultencoding(defaultencoding)
 
-def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
+''' if share_vocab, the trg_file should be not None'''
+def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False,
+                  share_vocab=False, trg_file=None):
 
     wlog('\tmax length {}, char? {}'.format(max_seq_len, char))
     if os.path.exists(vocab_file) is True:
@@ -33,26 +36,36 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, cha
 
     else:
 
-        vocab = count_vocab(data_file, max_vcb_size, max_seq_len, char=char)
+        vocab = count_vocab(data_file, max_vcb_size, max_seq_len, char=char,
+                            share_vocab=share_vocab, trg_file=trg_file)
         vocab.write_into_file(vocab_file)
         wlog('Save vocabulary file into {}'.format(vocab_file))
 
     return vocab
 
-def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
+def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False, share_vocab=False,
+                trg_file=None):
 
     assert data_file and os.path.exists(data_file), 'need file to extract vocabulary {} ...'.format(data_file)
+    assert ( share_vocab is True ) ^ ( trg_file == None ), \
+            'shard vocab? {}, trg_file? {}'.format(share_vocab, trg_file)
 
     vocab = Vocab()
-    #with open(data_file, 'r') as f:
     with io.open(data_file, mode='r', encoding='utf-8') as f:
         for sent in f.readlines():
-            #sent = sent.strip().encode('utf-8')
             sent = sent.strip()
             if char is True: words = zh_to_chars(sent)
             else: words = sent.split()
             if len(words) > max_seq_len: continue
             for word in words: vocab.add(word)
+    if share_vocab is True and trg_file is not None:
+        with io.open(trg_file, mode='r', encoding='utf-8') as f:
+            for sent in f.readlines():
+                sent = sent.strip()
+                if char is True: words = zh_to_chars(sent)
+                else: words = sent.split()
+                if len(words) > max_seq_len: continue
+                for word in words: vocab.add(word)
 
     words_cnt = sum(vocab.freq.values())
     new_vocab, new_words_cnt = vocab.keep_vocab_size(max_vcb_size)
@@ -185,14 +198,20 @@ if __name__ == "__main__":
     src = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_src_suffix))
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     vocabs = {}
-    wlog('\nPreparing source vocabulary from {} ... '.format(src))
-    src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan, wargs.max_seq_len)
-    wlog('\nPreparing target vocabulary from {} ... '.format(trg))
-    trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
-    n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
-    wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
-    vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
+    if wargs.share_vocab is False:
+        wlog('\nPreparing source vocabulary from {} ... '.format(src))
+        src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan, wargs.max_seq_len)
+        wlog('\nPreparing target vocabulary from {} ... '.format(trg))
+        trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
+        n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+        wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
+    else:
+        wlog('\nPreparing the shared vocabulary from \n\t{}\n\t{}'.format(src, trg))
+        src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan, wargs.max_seq_len,
+                                  share_vocab=True, trg_file=trg)
+        trg_vocab = src_vocab
 
+    vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
     wlog('\nPreparing training set from {} and {} ... '.format(src, trg))
     trains = {}
     train_src_tlst, train_trg_tlst = wrap_data(wargs.dir_data, wargs.train_prefix,
@@ -216,7 +235,8 @@ if __name__ == "__main__":
                                                    wargs.val_src_suffix, wargs.val_ref_suffix,
                                                    src_vocab, trg_vocab, shuffle=False,
                                                    max_seq_len=wargs.dev_max_seq_len)
-        batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, volatile=True, batch_sort=False)
+        batch_valid = Input(valid_src_tlst, valid_trg_tlst, batch_size=wargs.valid_batch_size,
+                            batch_sort=False, gpu_ids=wargs.gpu_ids)
 
     batch_tests = None
     if wargs.tests_prefix is not None:
@@ -226,9 +246,11 @@ if __name__ == "__main__":
         for prefix in wargs.tests_prefix:
             init_dir(wargs.dir_tests + '/' + prefix)
             test_file = '{}{}.{}'.format(wargs.val_tst_dir, prefix, wargs.val_src_suffix)
+            test_file = os.path.abspath(test_file)
             wlog('\nPreparing test set from {} ... '.format(test_file))
-            test_src_tlst, _ = wrap_tst_data(test_file, src_vocab)
-            batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True)
+            test_src_tlst, _ = wrap_tst_data(test_file, src_vocab, char=wargs.src_char)
+            batch_tests[prefix] = Input(test_src_tlst, None, batch_size=wargs.test_batch_size,
+                                        batch_sort=True, gpu_ids=wargs.gpu_ids)
 
     inputs = {}
     inputs['vocab'] = vocabs

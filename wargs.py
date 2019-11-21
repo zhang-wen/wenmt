@@ -20,7 +20,7 @@ work_dir=getdir()
 ''' directory to save model, validation output and test output '''
 dir_model, dir_valid, dir_tests = work_dir+'wmodel', work_dir+'wvalid', work_dir+'wtests'
 ''' vocabulary '''
-n_src_vcb_plan, n_trg_vcb_plan = 30000, 30000
+n_src_vcb_plan, n_trg_vcb_plan, share_vocab = 30000, 30000, False
 small, epoch_eval, src_char, char_bleu = False, False, False, False
 cased, with_bpe, ref_bpe, use_multi_bleu = False, False, False, True
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
@@ -80,6 +80,7 @@ elif dataset == 'deen':
     max_grad_norm = 25.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
     eval_valid_from, eval_valid_freq = 8000, 1000
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
+    share_vocab = True
     max_epochs, with_bpe, ref_bpe, cased, max_update = 1000, True, True, True, 20000    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
     batch_size = 40 if batch_type == 'sents' else 4096
 elif dataset == 'zhen':
@@ -112,6 +113,7 @@ elif dataset == 'ende':
     warmup_init_lr, min_lr, chunk_size = 1e-07, 1e-09, 2
     max_grad_norm = 0.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
+    share_vocab = True
     max_epochs, cased, with_bpe, ref_bpe, max_update = 1000, True, True, False, 200000
     #s_step_decay, e_step_decay, warmup_steps = 200000, 1200000, 8000
 

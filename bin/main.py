@@ -49,13 +49,21 @@ def main():
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     src, trg = os.path.abspath(src), os.path.abspath(trg)
     vocabs = {}
-    wlog('\nPreparing source vocabulary from {} ... '.format(src))
-    src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
-                              wargs.max_seq_len, char=wargs.src_char)
-    wlog('\nPreparing target vocabulary from {} ... '.format(trg))
-    trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
-    n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
-    wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
+    if wargs.share_vocab is False:
+        wlog('\nPreparing source vocabulary from {} ... '.format(src))
+        src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
+                                  wargs.max_seq_len, char=wargs.src_char)
+        wlog('\nPreparing target vocabulary from {} ... '.format(trg))
+        trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
+        n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+        wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
+    else:
+        wlog('\nPreparing the shared vocabulary from \n\t{}\n\t{}'.format(src, trg))
+        trg_vocab = src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
+                                              wargs.max_seq_len, share_vocab=True, trg_file=trg)
+        n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+        wlog('Shared vocabulary size: |vocab|={}'.format(src_vocab.size()))
+
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
 
     wlog('\nPreparing training set from {} and {} ... '.format(src, trg))
@@ -111,7 +119,7 @@ def main():
     trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb, wargs.input_dropout,
                             wargs.position_encoding, prefix='Trg')
     # share the embedding matrix - preprocess with share_vocab required.
-    if wargs.embs_share_weight:
+    if wargs.share_vocab:
         if n_src_vcb != n_trg_vcb:
             raise AssertionError('The `-share_vocab` should be set during '
                                  'preprocess if you use share_embeddings!')
