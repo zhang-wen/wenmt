@@ -2,11 +2,11 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'deen', 't2t_base'
+dataset, model_config = 'ende', 't2t_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 #gpu_ids = [7, 4,5,6]
-#gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-gpu_ids = [0, 1]
+gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+#gpu_ids = [0, 1]
 batch_size = 40 if batch_type == 'sents' else 4096
 #gpu_id = None
 n_co_models = 1
@@ -107,10 +107,10 @@ elif dataset == 'ende':
     val_tst_dir = '/ceph_nmt/wenzhang/2.data/mt/wmt14_ende/ende37kbpe/'
     val_src_suffix, val_ref_suffix = 'tc.en.37kbpe', 'tc.de'
     val_prefix, tests_prefix = 'newstest2013', ['newstest2014']
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.2, 0.1, 0.1, 0.2
-    learning_rate, warmup_steps, beta_2, adam_epsilon = 0.0007, 4000, 0.98, 1e-09
-    eval_valid_from, eval_valid_freq = 50000, 5000
-    warmup_init_lr, min_lr, chunk_size = 1e-07, 1e-09, 2
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.1, 0.1, 0.1, 0.1
+    learning_rate, warmup_steps, beta_2, adam_epsilon = 0.0007, 4000, 0.98, 1e-8
+    eval_valid_from, eval_valid_freq = 50000, 10000
+    warmup_init_lr, min_lr, chunk_size = 1e-07, 1e-09, 10
     max_grad_norm = 0.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
     share_vocab = True

@@ -124,6 +124,7 @@ class Trainer(object):
 
     def try_valid(self, e_idx, e_bidx, n_steps):
 
+        if n_steps > 150000: wargs.eval_valid_freq = 1000
         if wargs.epoch_eval is not True and n_steps > wargs.eval_valid_from and \
            n_steps % wargs.eval_valid_freq == 0:
             #eval_start = time.time()
