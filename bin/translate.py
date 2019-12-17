@@ -194,6 +194,7 @@ class Translator(object):
             WN += sum([len(one_sent) for one_sent in list(top[0])])
             wlog('{}-'.format(bidx), newline=0)
             sys.stderr.flush()
+            del batch
 
         wlog('\nNumber of sentences: {}'.format(SN))
         assert _SN == SN, 'sent number dismatch'
