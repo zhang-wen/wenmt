@@ -202,8 +202,10 @@ class Trainer(object):
 
                     self.grad_accumulate(real_batches, e_idx, current_steps)
                     current_steps = self.optim.n_current_steps
+                    del real_batches
                     accum_batches, real_batches = 0, []
-                    grad_checker(self.model, _checks)
+                    tc.cuda.empty_cache()
+                    #grad_checker(self.model, _checks)
                     if current_steps % wargs.display_freq == 0:
                         #wlog('look_ok_ytoks:{}, look_nll:{}, look_ytoks:{}'.format(self.look_ok_ytoks, self.look_nll, self.look_ytoks))
                         ud = time.time() - show_start - self.look_spend - self.eval_spend
