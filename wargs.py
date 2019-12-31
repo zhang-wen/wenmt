@@ -1,12 +1,12 @@
 # Maximal sequence length in training data
-max_seq_len = 128
+max_seq_len = 256
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
 dataset, model_config = 'ende', 't2t_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-#gpu_ids = [7, 4,5,6]
+gpu_ids = [7, 4,5,6]
 #gpu_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-gpu_ids = [0, 1]
+#gpu_ids = [0, 1]
 batch_size = 40 if batch_type == 'sents' else 4096
 #gpu_id = None
 n_co_models = 1
@@ -108,13 +108,14 @@ elif dataset == 'ende':
     val_src_suffix, val_ref_suffix = 'tc.en.37kbpe', 'tc.de'
     val_prefix, tests_prefix = 'newstest2013', ['newstest2014']
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.1, 0.1, 0.1, 0.1
-    learning_rate, warmup_steps, beta_2, adam_epsilon = 0.0007, 4000, 0.98, 1e-8
+    learning_rate, warmup_steps, beta_2, adam_epsilon = 0.001, 4000, 0.98, 1e-8
     eval_valid_from, eval_valid_freq = 50000, 10000
-    warmup_init_lr, min_lr, chunk_size = 1e-07, 1e-09, 10
+    warmup_init_lr, min_lr, chunk_size = 1e-07, 1e-09, 20
     max_grad_norm = 0.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
     share_vocab = True
     max_epochs, cased, with_bpe, ref_bpe, max_update = 1000, True, True, False, 200000
+    batch_size = 40 if batch_type == 'sents' else 4096
     #s_step_decay, e_step_decay, warmup_steps = 200000, 1200000, 8000
 
 src_vcb, trg_vcb = dir_data + 'src.vcb', dir_data + 'trg.vcb'
@@ -128,7 +129,7 @@ inputs_data = dir_data + 'inputs.pt'
 
 ''' training '''
 epoch_shuffle_train, epoch_shuffle_batch = False, False
-sort_k_batches = 100      # 0 for all sort, 1 for no sort
+sort_k_batches = 500      # 0 for all sort, 1 for no sort
 save_one_model = False
 select_model_by, test_in_training = 'loss', False   # loss or bleu
 start_epoch = 1

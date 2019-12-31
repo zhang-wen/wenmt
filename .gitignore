@@ -50,4 +50,5 @@ wexp*
 *.tar
 m_*
 *pycache*
+data*
 

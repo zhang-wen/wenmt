@@ -99,12 +99,12 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
 
     idx, ignore, longer = 0, 0, 0
     srcs, trgs, slens = [], [], []
-    while True:
+    while idx < num:
 
         src_sent = srcF.readline().strip()
-        if not src_sent:
-            wlog('\nFinish to read bilingual corpus.')
-            break
+        #if not src_sent:
+        #    wlog('\nFinish to read bilingual corpus.')
+        #    break
 
         if char is True: src_sent = ' '.join(zh_to_chars(src_sent))
         trg_refs = [trgF.readline().strip() for trgF in trgFs]
@@ -119,7 +119,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         if ( idx % number_every ) == 0: wlog(idx, newline=0)
 
         if src_sent == '' or any([trg_ref == '' for trg_ref in trg_refs]):
-            wlog('Ignore abnormal blank sentence in line number {}'.format(idx))
+            #wlog('Ignore abnormal blank sentence in line number {}'.format(idx))
             ignore += 1
             continue
 
@@ -139,6 +139,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         else:
             longer += 1
 
+    wlog('\nFinish to read bilingual corpus.')
     srcF.close()
     for trgF in trgFs: trgF.close()
 
