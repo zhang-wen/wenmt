@@ -104,7 +104,7 @@ def build_decoder(trg_emb):
         return SelfAttDecoder(trg_emb=trg_emb,
                               layer=SelfAttDecoderLayer(wargs.d_model, c(attn), c(attn), c(ff),
                                                         dropout=wargs.residual_dropout),
-                              N=wargs.n_enc_layers)
+                              N=wargs.n_dec_layers)
 
 def build_NMT(src_emb, trg_emb):
 
